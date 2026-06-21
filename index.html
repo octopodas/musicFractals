@@ -139,6 +139,7 @@
         <option value="3">Cosmos</option>
         <option value="4">Bioluminescence</option>
         <option value="5">Singularity</option>
+        <option value="6">Wormhole</option>
       </select>
     </label>
     <label class="row">Container
@@ -424,6 +425,19 @@ float singularityField(vec3 p){
   return (disk*1.9 + core*2.6 + shock) * horizon;
 }
 
+// wormhole: a ribbed tunnel funnelling to a bright vanishing point, rushing past the viewer
+float wormholeField(vec3 p){
+  float dd = smoothstep(1.0, -1.0, p.z);            // 0 at the near mouth → 1 at the far end
+  p.xy = r2(p.z*0.8 + uTime*0.2) * p.xy;            // gentle twist down the throat
+  float r = length(p.xy);
+  float radius = 0.85 - 0.6*dd;                     // funnels narrower toward the far end
+  float wall = exp(-pow((r - radius)*6.0, 2.0));    // glowing tube wall
+  float ribs = 0.5 + 0.5*sin(p.z*11.0 - uTime*5.0 + atan(p.y,p.x)*3.0);  // ribs rushing toward the viewer
+  wall *= 0.35 + 0.65*ribs;
+  float core = exp(-r*4.5) * dd * (1.2 + uBass*2.0);   // bright vanishing point, throbs on bass
+  return wall*1.6 + core*2.2;
+}
+
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
 mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1,0,0, 0,c,-s, 0,s,c); }
 
@@ -568,6 +582,9 @@ void main(){
       } else if(uMode==5){
         // ---- SINGULARITY: accretion disk spiralling into a dark core ----
         d = singularityField(q) * uDensity * reactBoost;
+      } else if(uMode==6){
+        // ---- WORMHOLE: ribbed tunnel funnelling to a vanishing point ----
+        d = wormholeField(q) * uDensity * reactBoost;
       } else {
         // ---- LIQUID: domain-warped fbm fluid with ridged veins ----
         vec3 sp = q*2.3;
