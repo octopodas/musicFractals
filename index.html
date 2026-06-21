@@ -901,8 +901,9 @@ function frame(now){
   const dt = Math.min(0.05,(now-prev)/1000); prev=now;
   analyze();
 
-  // auto-speed: smoothed tempo that bursts on each beat (slider scales it)
-  beatSpeed += ((0.5 + beat*2.4 + band.bass*0.8) - beatSpeed) * 0.22;
+  // auto-speed: lurches hard on each beat, coasts back toward baseline between (slider scales it)
+  const beatTarget = 0.25 + beat*4.0 + band.bass*0.4;
+  beatSpeed += (beatTarget - beatSpeed) * (beatTarget > beatSpeed ? 0.65 : 0.30); // snap up fast, ease down quicker so each beat punches
   const speed = ui.autospeed ? ui.speed * beatSpeed : ui.speed;
   if(ui.autospeed) $('speedV').textContent = speed.toFixed(1);
 
