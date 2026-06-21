@@ -44,6 +44,12 @@
 
   label.row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:9px 0;font-size:12px}
   label.row span.v{color:var(--accent);font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+  label.row .v{margin-left:auto}
+  .help{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;font-size:10px;font-weight:700;
+    cursor:pointer;color:var(--muted);border:1px solid var(--stroke);user-select:none;flex:none}
+  .help:hover{color:var(--accent);border-color:var(--accent)}
+  .help-text{font-size:11px;color:var(--muted);line-height:1.45;margin:-2px 0 6px;padding:7px 9px;border-radius:7px;
+    background:rgba(76,197,255,.07);border:1px solid var(--stroke)}
 
   input[type=range]{-webkit-appearance:none;appearance:none;width:140px;height:4px;border-radius:4px;
     background:linear-gradient(90deg,var(--accent),var(--accent2));outline:none}
@@ -835,6 +841,29 @@ $('bgPreset').onchange = ()=>{
   t.value=top; t.dispatchEvent(new Event('input'));
   b.value=bot; b.dispatchEvent(new Event('input'));
 };
+
+// per-slider help: a "?" icon in each slider's label toggles a one-line explanation
+const SLIDER_HELP = {
+  speed: 'How fast the visuals animate. With “Sync speed to beat” on, this scales the beat-driven tempo.',
+  react: 'How strongly the music drives motion and brightness. Higher = more violent reaction to the audio.',
+  pulse: 'Strength of the brightness rings that travel outward from the centre on each beat.',
+  dens:  'Thickness/opacity of the volume. Higher packs in more glowing material.',
+  hue:   'Rotates every colour around the spectrum. 0 = palette unchanged.',
+  sat:   'Colour intensity. 0 = greyscale, 1 = normal, above 1 = boosted.',
+  tint:  'Washes the whole volume toward the loudest band’s colour (bass/mid/treble). 0 = off.',
+  spin:  'How fast the scene auto-rotates (only when Auto-rotate is on).',
+};
+Object.entries(SLIDER_HELP).forEach(([id,text])=>{
+  const input=$(id), label=input && input.previousElementSibling;
+  if(!label || !label.classList.contains('row')) return;
+  const icon=document.createElement('span');
+  icon.className='help'; icon.textContent='?'; icon.title='What does this do?';
+  const tip=document.createElement('div');
+  tip.className='help-text'; tip.textContent=text; tip.hidden=true;
+  icon.onclick=()=>{ tip.hidden=!tip.hidden; };
+  label.appendChild(icon);
+  input.insertAdjacentElement('afterend', tip);
+});
 bindRange('tint','tint','tintV');
 $('autospeed').onchange = ()=>{
   ui.autospeed = $('autospeed').checked;
