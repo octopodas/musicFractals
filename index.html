@@ -134,7 +134,10 @@
     <button id="addFiles" style="width:100%;margin-top:8px">＋ Add audio files</button>
     <input id="fileInput" type="file" accept="audio/*" multiple hidden>
     <label class="row" style="margin-top:8px">🎧 System audio <input type="checkbox" id="sysaudio" style="width:auto"></label>
-    <div class="hint">Visualise live audio from another app. Chrome: pick a <b>Tab</b> + “Share tab audio”, or a <b>Monitor</b> source on Linux. Resets on reload.</div>
+    <div class="hint">Live audio from another app via screen-share. Chrome: pick a <b>Tab</b> + “Share tab audio” (system-wide only on Windows).</div>
+    <label class="row" style="margin-top:8px">🎤 Mic / Monitor <input type="checkbox" id="micaudio" style="width:auto"></label>
+    <select id="micDevice" style="display:none;margin-top:6px"></select>
+    <div class="hint">Capture an input device. On Linux pick a <b>“Monitor of …”</b> source for all system audio — no extra software. Both reset on reload.</div>
   </div>
 
   <div class="group">
@@ -724,33 +727,67 @@ function initAudio(){
   srcNode.connect(analyser);           // …and into the analyser (a leaf — kept out of the output path so a captured stream can drive it without echoing)
 }
 
-// ---------- live system / tab audio capture (getDisplayMedia) ----------
-let sysStream=null, sysSrc=null;
+// ---------- live capture: route a MediaStream into the analyser instead of the file ----------
+// clean grab for music — Chrome would otherwise apply voice-call processing to a monitor feed
+const CAP_AUDIO = {echoCancellation:false, noiseSuppression:false, autoGainControl:false};
+let capStream=null, capSrc=null, fileFeedsViz=true;
+function fileViz(on){ if(on===fileFeedsViz||!srcNode) return; on ? srcNode.connect(analyser) : srcNode.disconnect(analyser); fileFeedsViz=on; }
+function useCapture(stream){                                   // swap whatever is driving the analyser to this stream
+  if(capSrc) capSrc.disconnect();
+  if(capStream) capStream.getTracks().forEach(t=>t.stop());
+  stream.getVideoTracks().forEach(t=>t.stop());               // audio only
+  capStream = stream; capSrc = actx.createMediaStreamSource(stream);
+  fileViz(false); capSrc.connect(analyser);                   // no connect to destination → no echo
+}
+function stopCapture(){
+  if(capSrc){ capSrc.disconnect(); capSrc=null; }
+  if(capStream){ capStream.getTracks().forEach(t=>t.stop()); capStream=null; }
+  fileViz(true);
+}
+
+// route 1: getDisplayMedia — tab audio (any OS) / system audio (Windows)
 async function toggleSysAudio(on){
-  if(on){
-    if(!navigator.mediaDevices?.getDisplayMedia){ alert('System audio capture is not supported in this browser.'); return false; }
-    initAudio(); if(actx.state==='suspended') actx.resume();
-    let s;
-    try{ s = await navigator.mediaDevices.getDisplayMedia({audio:true, video:true}); }
-    catch(e){ return false; }                                  // user dismissed the picker
-    if(!s.getAudioTracks().length){                            // shared a source with no audio
-      s.getTracks().forEach(t=>t.stop());
-      alert('No audio in that share.\nPick a Tab and tick “Share tab audio”, or choose a Monitor source.');
-      return false;
-    }
-    s.getVideoTracks().forEach(t=>t.stop());                   // drop video, keep audio
-    sysStream = s;
-    sysSrc = actx.createMediaStreamSource(sysStream);
-    srcNode.disconnect(analyser);                              // file stops driving the visuals
-    sysSrc.connect(analyser);                                  // system audio drives them (no connect to destination → no echo)
-    sysStream.getAudioTracks()[0].onended = ()=>{ $('sysaudio').checked=false; toggleSysAudio(false); };  // user clicked “Stop sharing”
-    return true;
-  } else {
-    if(sysSrc){ sysSrc.disconnect(); sysSrc=null; }
-    if(sysStream){ sysStream.getTracks().forEach(t=>t.stop()); sysStream=null; }
-    if(srcNode && analyser) srcNode.connect(analyser);         // file drives the visuals again
+  if(!on){ stopCapture(); return false; }
+  if(!navigator.mediaDevices?.getDisplayMedia){ alert('System audio capture is not supported in this browser.'); return false; }
+  initAudio(); if(actx.state==='suspended') actx.resume();
+  let s;
+  try{ s = await navigator.mediaDevices.getDisplayMedia({audio:true, video:true}); }
+  catch(e){ return false; }                                   // user dismissed the picker
+  if(!s.getAudioTracks().length){                             // shared a source with no audio
+    s.getTracks().forEach(t=>t.stop());
+    alert('No audio in that share.\nPick a Tab and tick “Share tab audio”, or use the Mic / Monitor option.');
     return false;
   }
+  useCapture(s);
+  s.getAudioTracks()[0].onended = ()=>{ $('sysaudio').checked=false; stopCapture(); };  // user clicked “Stop sharing”
+  return true;
+}
+
+// route 2: getUserMedia — pick a PipeWire/PulseAudio "Monitor of …" device for true system audio on Linux
+async function toggleMicAudio(on){
+  if(!on){ $('micDevice').style.display='none'; stopCapture(); return false; }
+  if(!navigator.mediaDevices?.getUserMedia){ alert('Microphone capture is not supported in this browser.'); return false; }
+  initAudio(); if(actx.state==='suspended') actx.resume();
+  let s;
+  try{ s = await navigator.mediaDevices.getUserMedia({audio:CAP_AUDIO}); }   // permission + default device
+  catch(e){ return false; }                                   // user denied
+  useCapture(s);
+  await populateMicDevices();                                 // labels are only exposed after permission
+  $('micDevice').style.display='';
+  return true;
+}
+async function populateMicDevices(){
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');
+  const cur = capStream?.getAudioTracks()[0].getSettings().deviceId;
+  $('micDevice').innerHTML = devs.map(d=>`<option value="${d.deviceId}">${d.label||'Input'}</option>`).join('');
+  if(cur) $('micDevice').value = cur;
+}
+async function selectMicDevice(id){
+  initAudio(); if(actx.state==='suspended') actx.resume();
+  let s;
+  try{ s = await navigator.mediaDevices.getUserMedia({audio:{...CAP_AUDIO, deviceId:{exact:id}}}); }
+  catch(e){ return; }
+  useCapture(s);
 }
 
 function analyze(){
@@ -926,8 +963,16 @@ $('autorot').onchange = ()=> ui.autorot=$('autorot').checked;
 $('sysaudio').onchange = async ()=>{
   const on = $('sysaudio').checked;
   const ok = await toggleSysAudio(on);
-  if(on && !ok) $('sysaudio').checked = false;   // cancelled / unsupported / no audio
+  if(on && !ok) $('sysaudio').checked = false;                        // cancelled / unsupported / no audio
+  if(ok){ $('micaudio').checked = false; $('micDevice').style.display='none'; }  // one capture at a time
 };
+$('micaudio').onchange = async ()=>{
+  const on = $('micaudio').checked;
+  const ok = await toggleMicAudio(on);
+  if(on && !ok) $('micaudio').checked = false;                        // denied / unsupported
+  if(ok) $('sysaudio').checked = false;                              // one capture at a time
+};
+$('micDevice').onchange = ()=> selectMicDevice($('micDevice').value);
 $('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); updateOffset(); };
 $('hidePanel').onclick = ()=>{ $('panel').classList.add('hidden'); $('toggle').style.display='grid'; updateOffset(); };
 $('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').style.display='none'; updateOffset(); };
