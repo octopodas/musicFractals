@@ -169,6 +169,10 @@
     <label class="row" style="margin-top:2px">Sync speed to beat <input type="checkbox" id="autospeed" style="width:auto"></label>
     <label class="row">Reactivity <span class="v" id="reactV">1.0</span></label>
     <input class="seek" id="react" type="range" min="0" max="6" step="0.05" value="1" style="width:100%">
+    <label class="row">AGC floor <span class="v" id="agcFloorMulV">1.00</span></label>
+    <input class="seek" id="agcFloorMul" type="range" min="0.3" max="2" step="0.05" value="1" style="width:100%">
+    <label class="row">AGC adapt <span class="v" id="agcDecayV">0.995</span></label>
+    <input class="seek" id="agcDecay" type="range" min="0.95" max="0.999" step="0.001" value="0.995" style="width:100%">
     <label class="row">Pulse <span class="v" id="pulseV">1.0</span></label>
     <input class="seek" id="pulse" type="range" min="0" max="2.5" step="0.01" value="1" style="width:100%">
     <label class="row">Density <span class="v" id="densV">1.0</span></label>
@@ -699,6 +703,9 @@ resize(); updateOffset();
 // ---------- audio analysis ----------
 let actx, analyser, freq, srcNode;
 const band = {bass:0, mid:0, treble:0, level:0};
+// per-band rolling peaks for auto-gain; floors double as init and gate silence
+const agcFloor = {bass:0.35, mid:0.20, treble:0.10};
+const peak = {bass:0.35, mid:0.20, treble:0.10};
 let beat = 0, bassAvg = 0, hueAuto = 0;
 
 function initAudio(){
@@ -721,9 +728,12 @@ function analyze(){
   const avg = (a,b)=>{ let s=0,n=0; for(let i=idx(a);i<=idx(b);i++){s+=freq[i];n++;} return n?s/n/255:0; };
   // attack-fast decay-slow smoothing
   const sm = (cur,t)=> t>cur ? t : cur*0.86+t*0.14;
-  band.bass   = sm(band.bass,   avg(20,160));
-  band.mid    = sm(band.mid,    avg(160,1800));
-  band.treble = sm(band.treble, avg(1800,9000));
+  // per-band auto-gain: normalize each band to its own recent peak so naturally-quiet
+  // bands (treble) swing full-scale; peak rises instantly, decays slowly, floored to gate silence
+  const agc = (k,raw)=>{ peak[k] = Math.max(raw, peak[k]*ui.agcDecay, agcFloor[k]*ui.agcFloorMul); return Math.min(1, raw/peak[k]); };
+  band.bass   = sm(band.bass,   agc('bass',   avg(20,160)));
+  band.mid    = sm(band.mid,    agc('mid',    avg(160,1800)));
+  band.treble = sm(band.treble, agc('treble', avg(1800,9000)));
   band.level  = sm(band.level,  avg(20,12000));
   // beat detection on bass energy
   bassAvg = bassAvg*0.92 + band.bass*0.08;
@@ -809,13 +819,15 @@ async function discover(){
 discover();
 
 // ---------- UI bindings ----------
-const ui = { mode:0, shape:0, speed:1, autospeed:false, react:1, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
+const ui = { mode:0, shape:0, speed:1, autospeed:false, react:1, agcFloorMul:1, agcDecay:0.995, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
   low:[0.039,0.165,0.40], mid:[0.15,0.65,1.0], high:[0.498,0.878,1.0], core:[0.74,0.94,1.0], base:[1.0,0.48,0.12],
   bassCol:[1.0,0.18,0.18], midCol:[0.215,1.0,0.368], trebCol:[0.227,0.627,1.0], tint:0,
   bgTop:[0.031,0.051,0.086], bgBot:[0.016,0.020,0.035] };
 function bindRange(id,key,disp){ const el=$(id); el.oninput=()=>{ ui[key]=+el.value; if(disp) $(disp).textContent=(+el.value).toFixed(key==='hue'?0:1); }; el.oninput(); }
 bindRange('speed','speed','speedV');
 bindRange('react','react','reactV');
+$('agcFloorMul').oninput = ()=>{ ui.agcFloorMul=+$('agcFloorMul').value; $('agcFloorMulV').textContent=ui.agcFloorMul.toFixed(2); }; $('agcFloorMul').oninput();
+$('agcDecay').oninput    = ()=>{ ui.agcDecay=+$('agcDecay').value; $('agcDecayV').textContent=ui.agcDecay.toFixed(3); }; $('agcDecay').oninput();
 bindRange('pulse','pulse','pulseV');
 bindRange('dens','dens','densV');
 $('hue').oninput = ()=>{ ui.hue=+$('hue').value; $('hueV').textContent=Math.round(ui.hue*360); }; $('hue').oninput();
@@ -846,6 +858,8 @@ $('bgPreset').onchange = ()=>{
 const SLIDER_HELP = {
   speed: 'How fast the visuals animate. With “Sync speed to beat” on, this scales the beat-driven tempo.',
   react: 'How strongly the music drives motion and brightness. Higher = more violent reaction to the audio.',
+  agcFloorMul: 'Auto-gain floor. Each band (bass/mid/treble) is normalized to its own recent peak so quiet bands still register. Raise = a band must be louder to read full-scale (less sensitive); lower = more sensitive.',
+  agcDecay: 'How fast auto-gain forgets a loud peak. Lower = adapts faster to quiet sections (quiet treble lights up sooner); higher = steadier, slower to re-amplify.',
   pulse: 'Strength of the brightness rings that travel outward from the centre on each beat.',
   dens:  'Thickness/opacity of the volume. Higher packs in more glowing material.',
   hue:   'Rotates every colour around the spectrum. 0 = palette unchanged.',
@@ -878,7 +892,7 @@ $('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').s
 // ---------- persist control settings (localStorage, per-origin) ----------
 const STORE_KEY = 'fractalCube.settings';
 // colours come before 'style' so restoring a saved preset palette isn't forced to Custom
-const PERSIST_IDS = ['speed','autospeed','react','pulse','dens','hue','sat','spin','vol','autorot',
+const PERSIST_IDS = ['speed','autospeed','react','agcFloorMul','agcDecay','pulse','dens','hue','sat','spin','vol','autorot',
   'cLow','cMid','cHigh','cCore','cBase','cBass','cMidB','cTreb','tint','cBgTop','cBgBot','mode','shape','style','quality'];
 function saveSettings(){
   try{
