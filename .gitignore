@@ -1,0 +1,9 @@
+# user-supplied audio (copyright) — keep only the generated demo
+tracks/*
+!tracks/README.md
+!tracks/tracks.json
+!tracks/test-tone.wav
+
+prompt.txt
+__pycache__/
+.DS_Store
