@@ -56,7 +56,8 @@
   select{width:100%}
   select option{background:#0c1018;color:var(--text)}
   .swatches{display:flex;gap:6px}
-  input[type=color]{-webkit-appearance:none;appearance:none;width:32px;height:24px;padding:0;
+  .swatches input[type=color]{flex:1}
+  input[type=color]{-webkit-appearance:none;appearance:none;width:32px;height:26px;padding:0;
     border:1px solid var(--stroke);border-radius:7px;background:none;cursor:pointer}
   input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
   input[type=color]::-webkit-color-swatch{border:none;border-radius:5px}
@@ -155,13 +156,14 @@
     <input class="seek" id="hue" type="range" min="0" max="1" step="0.001" value="0" style="width:100%">
     <label class="row">Saturation <span class="v" id="satV">1.0</span></label>
     <input class="seek" id="sat" type="range" min="0" max="2" step="0.01" value="1" style="width:100%">
-    <label class="row">Custom colors
-      <span class="swatches">
-        <input type="color" id="cCore" value="#bcf0ff" title="Core / highlights">
-        <input type="color" id="cMid"  value="#26a6ff" title="Body">
-        <input type="color" id="cBase" value="#ff7a1e" title="Base glow">
-      </span>
-    </label>
+    <div class="glabel" style="margin:10px 0 6px">Custom colors · sparse → dense, + base</div>
+    <div class="swatches">
+      <input type="color" id="cLow"  value="#0a2a66" title="Low density">
+      <input type="color" id="cMid"  value="#26a6ff" title="Body">
+      <input type="color" id="cHigh" value="#7fe0ff" title="High density">
+      <input type="color" id="cCore" value="#bcf0ff" title="Core / brightest">
+      <input type="color" id="cBase" value="#ff7a1e" title="Base glow">
+    </div>
     <div class="hint">Pick any color to switch Palette to Custom.</div>
   </div>
 
@@ -237,7 +239,7 @@ uniform float uTime;     // fluid time (already scaled by speed + audio)
 uniform vec2  uRot;      // yaw, pitch
 uniform float uBass, uMid, uTreble, uLevel, uBeat;
 uniform float uReact, uDensity, uHue, uPulse, uPulseT, uSat;
-uniform vec3  uColCore, uColMid, uColBase;
+uniform vec3  uColLow, uColMid, uColHigh, uColCore, uColBase;
 uniform int   uStyle, uMode;
 
 // ---- hash / value noise ----
@@ -322,11 +324,12 @@ vec3 fluidColor(float d, float y){
   } else if(uStyle==4){        // Aurora
     col = pal(t*0.7+y*0.3, vec3(0.0,0.3,0.2), vec3(0.3,0.5,0.4), vec3(1.0), vec3(0.3,0.5,0.7));
     col += vec3(0.3,1.0,0.6)*pow(d,3.0)*0.7;
-  } else {                     // Custom — user-picked Core / Body / Base colors
-    vec3 body = mix(uColMid*0.25, uColMid, smoothstep(0.0,0.6,d));
-    body = mix(body, uColCore, clamp(pow(d,2.2),0.0,1.0)); // clamp so the brightest = picked Core
+  } else {                     // Custom — 4-stop density ramp (Low→Body→High→Core) + Base
+    vec3 ramp = mix(uColLow,  uColMid,  smoothstep(0.0, 0.40, d));
+    ramp = mix(ramp, uColHigh, smoothstep(0.40, 0.70, d));
+    ramp = mix(ramp, uColCore, clamp(smoothstep(0.70, 1.0, d), 0.0, 1.0));
     float floorMix = smoothstep(-0.15,-0.95,y);
-    col = mix(body, uColBase, floorMix*0.9);
+    col = mix(ramp, uColBase, floorMix*0.9);
   }
   col = max(col, 0.0);
   // saturation: 0 = greyscale, 1 = normal, >1 = boosted
@@ -461,7 +464,7 @@ const u = {
   bass:U('uBass'), mid:U('uMid'), treble:U('uTreble'), level:U('uLevel'), beat:U('uBeat'),
   react:U('uReact'), density:U('uDensity'), hue:U('uHue'), style:U('uStyle'), mode:U('uMode'),
   pulse:U('uPulse'), pulseT:U('uPulseT'), sat:U('uSat'),
-  colCore:U('uColCore'), colMid:U('uColMid'), colBase:U('uColBase')
+  colLow:U('uColLow'), colMid:U('uColMid'), colHigh:U('uColHigh'), colCore:U('uColCore'), colBase:U('uColBase')
 };
 const hex2rgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
 
@@ -474,7 +477,8 @@ function resize(){
 let offsetX = 0;
 function updateOffset(){
   const p = document.getElementById('panel');
-  const cssShift = p.classList.contains('hidden') ? 0 : p.getBoundingClientRect().right/2;
+  // offsetLeft/offsetWidth = layout box, unaffected by the slide-in transform
+  const cssShift = p.classList.contains('hidden') ? 0 : (p.offsetLeft + p.offsetWidth)/2;
   offsetX = cssShift * renderScale;
 }
 addEventListener('resize', ()=>{ resize(); updateOffset(); });
@@ -594,7 +598,7 @@ discover();
 
 // ---------- UI bindings ----------
 const ui = { mode:0, speed:1, react:1, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
-  core:[0.74,0.94,1.0], mid:[0.15,0.65,1.0], base:[1.0,0.48,0.12] };
+  low:[0.039,0.165,0.40], mid:[0.15,0.65,1.0], high:[0.498,0.878,1.0], core:[0.74,0.94,1.0], base:[1.0,0.48,0.12] };
 function bindRange(id,key,disp){ const el=$(id); el.oninput=()=>{ ui[key]=+el.value; if(disp) $(disp).textContent=(+el.value).toFixed(key==='hue'?0:1); }; el.oninput(); }
 bindRange('speed','speed','speedV');
 bindRange('react','react','reactV');
@@ -606,7 +610,7 @@ bindRange('sat','sat','satV');
 $('mode').onchange = ()=> ui.mode=+$('mode').value;
 $('style').onchange = ()=> ui.style=+$('style').value;
 // custom palette color pickers (selecting one also jumps to the Custom palette)
-[['cCore','core'],['cMid','mid'],['cBase','base']].forEach(([id,key])=>{
+[['cLow','low'],['cMid','mid'],['cHigh','high'],['cCore','core'],['cBase','base']].forEach(([id,key])=>{
   const el=$(id);
   el.oninput = ()=>{ ui[key]=hex2rgb(el.value); $('style').value='5'; ui.style=5; };
 });
@@ -668,8 +672,10 @@ function frame(now){
   gl.uniform1f(u.pulse, ui.pulse);
   gl.uniform1f(u.pulseT, pulseT);
   gl.uniform1f(u.sat, ui.sat);
-  gl.uniform3fv(u.colCore, ui.core);
+  gl.uniform3fv(u.colLow, ui.low);
   gl.uniform3fv(u.colMid, ui.mid);
+  gl.uniform3fv(u.colHigh, ui.high);
+  gl.uniform3fv(u.colCore, ui.core);
   gl.uniform3fv(u.colBase, ui.base);
   gl.drawArrays(gl.TRIANGLES,0,3);
 
