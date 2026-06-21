@@ -154,6 +154,7 @@
     </label>
     <label class="row">Speed <span class="v" id="speedV">1.0</span></label>
     <input class="seek" id="speed" type="range" min="0" max="3" step="0.01" value="1" style="width:100%">
+    <label class="row" style="margin-top:2px">Sync speed to beat <input type="checkbox" id="autospeed" style="width:auto"></label>
     <label class="row">Reactivity <span class="v" id="reactV">1.0</span></label>
     <input class="seek" id="react" type="range" min="0" max="6" step="0.05" value="1" style="width:100%">
     <label class="row">Pulse <span class="v" id="pulseV">1.0</span></label>
@@ -693,7 +694,7 @@ async function discover(){
 discover();
 
 // ---------- UI bindings ----------
-const ui = { mode:0, shape:0, speed:1, react:1, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
+const ui = { mode:0, shape:0, speed:1, autospeed:false, react:1, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
   low:[0.039,0.165,0.40], mid:[0.15,0.65,1.0], high:[0.498,0.878,1.0], core:[0.74,0.94,1.0], base:[1.0,0.48,0.12] };
 function bindRange(id,key,disp){ const el=$(id); el.oninput=()=>{ ui[key]=+el.value; if(disp) $(disp).textContent=(+el.value).toFixed(key==='hue'?0:1); }; el.oninput(); }
 bindRange('speed','speed','speedV');
@@ -711,6 +712,11 @@ $('style').onchange = ()=> ui.style=+$('style').value;
   const el=$(id);
   el.oninput = ()=>{ ui[key]=hex2rgb(el.value); $('style').value='5'; ui.style=5; };
 });
+$('autospeed').onchange = ()=>{
+  ui.autospeed = $('autospeed').checked;
+  $('speed').style.opacity = ui.autospeed ? 0.45 : 1;   // dim slider when beat-driven
+  if(!ui.autospeed) $('speedV').textContent = (+$('speed').value).toFixed(1);
+};
 $('autorot').onchange = ()=> ui.autorot=$('autorot').checked;
 $('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); updateOffset(); };
 $('hidePanel').onclick = ()=>{ $('panel').classList.add('hidden'); $('toggle').style.display='grid'; updateOffset(); };
@@ -719,7 +725,7 @@ $('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').s
 // ---------- persist control settings (localStorage, per-origin) ----------
 const STORE_KEY = 'fractalCube.settings';
 // colours come before 'style' so restoring a saved preset palette isn't forced to Custom
-const PERSIST_IDS = ['speed','react','pulse','dens','hue','sat','spin','vol','autorot',
+const PERSIST_IDS = ['speed','autospeed','react','pulse','dens','hue','sat','spin','vol','autorot',
   'cLow','cMid','cHigh','cCore','cBase','mode','shape','style','quality'];
 function saveSettings(){
   try{
@@ -766,14 +772,19 @@ for(let i=0;i<NB;i++) levelsEl.appendChild(document.createElement('i'));
 const bars=[...levelsEl.children];
 
 // ---------- main loop ----------
-let fluidTime = 0, pulseT = 0, prev = performance.now();
+let fluidTime = 0, pulseT = 0, beatSpeed = 1, prev = performance.now();
 function frame(now){
   const dt = Math.min(0.05,(now-prev)/1000); prev=now;
   analyze();
 
+  // auto-speed: smoothed tempo that bursts on each beat (slider scales it)
+  beatSpeed += ((0.5 + beat*2.4 + band.bass*0.8) - beatSpeed) * 0.22;
+  const speed = ui.autospeed ? ui.speed * beatSpeed : ui.speed;
+  if(ui.autospeed) $('speedV').textContent = speed.toFixed(1);
+
   // fluid time surges with music
   const drive = 0.35 + ui.react*(band.level*1.4 + beat*1.5);
-  fluidTime += dt * ui.speed * drive;
+  fluidTime += dt * speed * drive;
   // pulse phase travels outward, accelerating on each beat
   pulseT += dt * (1.2 + beat*7.0 + band.bass*2.5);
 
