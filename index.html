@@ -132,6 +132,7 @@
       <select id="mode" style="width:150px">
         <option value="0">Liquid</option>
         <option value="1">Fractal</option>
+        <option value="2">Crystal</option>
       </select>
     </label>
     <label class="row">Palette
@@ -295,6 +296,37 @@ float fractalField(vec3 p){
   return max(0.0, 4.2*accum/tw - 0.6);
 }
 
+vec3 hash33(vec3 p){
+  p = vec3(dot(p,vec3(127.1,311.7,74.7)),
+           dot(p,vec3(269.5,183.3,246.1)),
+           dot(p,vec3(113.5,271.9,124.6)));
+  return fract(sin(p)*43758.5453123);
+}
+// 3D cellular noise -> nearest (F1) and 2nd nearest (F2) feature-point distances
+vec2 worley(vec3 p){
+  vec3 ip = floor(p), fp = fract(p);
+  float f1 = 9.0, f2 = 9.0;
+  for(int x=-1;x<=1;x++)
+  for(int y=-1;y<=1;y++)
+  for(int z=-1;z<=1;z++){
+    vec3 g = vec3(float(x),float(y),float(z));
+    vec3 o = hash33(ip+g);
+    o = 0.5 + 0.5*sin(uTime*0.7 + 6.2831853*o);   // animate the gem centres
+    vec3 d = g + o - fp;
+    float dd = dot(d,d);
+    if(dd<f1){ f2=f1; f1=dd; } else if(dd<f2){ f2=dd; }
+  }
+  return sqrt(vec2(f1,f2));
+}
+// faceted crystal lattice: glowing cell edges + soft gem cores, flaring on the beat
+float crystalField(vec3 p){
+  float scale = 3.0 + uBass*1.2;
+  vec2 w = worley(p*scale);
+  float edge = 1.0 - smoothstep(0.0, 0.06 + uTreble*0.05, w.y - w.x); // thin glowing facets
+  float gem  = smoothstep(0.75, 0.0, w.x);                            // soft glow toward centres
+  return edge*(1.0 + uReact*uBeat*1.6) + gem*0.35;
+}
+
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
 mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1,0,0, 0,c,-s, 0,s,c); }
 
@@ -395,6 +427,9 @@ void main(){
       if(uMode==1){
         // ---- FRACTAL: kaliset sphere-folding field, dancing with the music ----
         d = fractalField(q) * uDensity * reactBoost;
+      } else if(uMode==2){
+        // ---- CRYSTAL: faceted Voronoi lattice, glowing gem cells ----
+        d = crystalField(q) * uDensity * reactBoost;
       } else {
         // ---- LIQUID: domain-warped fbm fluid with ridged veins ----
         vec3 sp = q*2.3;
