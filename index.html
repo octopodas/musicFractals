@@ -768,12 +768,16 @@ async function toggleMicAudio(on){
   if(!on){ $('micDevice').style.display='none'; stopCapture(); return false; }
   if(!navigator.mediaDevices?.getUserMedia){ alert('Microphone capture is not supported in this browser.'); return false; }
   initAudio(); if(actx.state==='suspended') actx.resume();
-  let s;
-  try{ s = await navigator.mediaDevices.getUserMedia({audio:CAP_AUDIO}); }   // permission + default device
-  catch(e){ return false; }                                   // user denied
-  useCapture(s);
-  await populateMicDevices();                                 // labels are only exposed after permission
+  let started=false;
+  try{ useCapture(await navigator.mediaDevices.getUserMedia({audio:CAP_AUDIO})); started=true; }   // permission + default device
+  catch(e){ console.warn('default input unavailable:', e.name); }   // busy/blocked default — still open the picker below
+  await populateMicDevices();                                 // labels are exposed once the site has mic permission
+  if(!$('micDevice').options.length){
+    alert('No audio input available.\nAllow the microphone for this site (camera/mic or tune icon in the address bar), then try again.');
+    return false;
+  }
   $('micDevice').style.display='';
+  if(!started) alert('Default input was busy — pick a source (e.g. SystemAudioLoop) from the list.');
   return true;
 }
 async function populateMicDevices(){
@@ -786,7 +790,7 @@ async function selectMicDevice(id){
   initAudio(); if(actx.state==='suspended') actx.resume();
   let s;
   try{ s = await navigator.mediaDevices.getUserMedia({audio:{...CAP_AUDIO, deviceId:{exact:id}}}); }
-  catch(e){ return; }
+  catch(e){ alert('Couldn’t switch to that input: '+e.name+'.'); return; }
   useCapture(s);
 }
 
