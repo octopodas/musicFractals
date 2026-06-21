@@ -81,6 +81,12 @@
     backdrop-filter:blur(18px)}
   .panel.hidden ~ .toggle{display:grid}
 
+  .corner-btn{position:fixed;top:16px;right:16px;z-index:11;width:40px;height:40px;border-radius:12px;
+    display:grid;place-items:center;color:var(--text);background:var(--panel);border:1px solid var(--stroke);
+    backdrop-filter:blur(18px);cursor:pointer;transition:.15s}
+  .corner-btn:hover{background:rgba(76,197,255,.14);border-color:rgba(76,197,255,.5)}
+  .corner-btn svg{width:18px;height:18px}
+
   .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;background:rgba(76,197,255,.15);color:var(--accent);margin-left:6px}
   .hint{color:var(--muted);font-size:11px;margin-top:6px;line-height:1.5}
   .levels{display:flex;gap:4px;height:18px;align-items:flex-end;margin-top:4px}
@@ -92,6 +98,9 @@
 <canvas id="gl"></canvas>
 
 <button class="toggle" id="toggle" title="Show controls">☰</button>
+<button class="corner-btn" id="fs" title="Fullscreen">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+</button>
 
 <div class="panel" id="panel">
   <div style="display:flex;justify-content:space-between;align-items:start">
@@ -553,6 +562,15 @@ $('autorot').onchange = ()=> ui.autorot=$('autorot').checked;
 $('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); };
 $('hidePanel').onclick = ()=> $('panel').classList.add('hidden');
 $('toggle').onclick = ()=> $('panel').classList.remove('hidden');
+
+// fullscreen toggle (native Fullscreen API)
+const FS_ENTER='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3';
+const FS_EXIT ='M5 8h1a2 2 0 0 0 2-2V5M16 5v1a2 2 0 0 0 2 2h1M19 16h-1a2 2 0 0 0-2 2v1M8 19v-1a2 2 0 0 0-2-2H5';
+$('fs').onclick = ()=> document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(()=>{});
+document.addEventListener('fullscreenchange', ()=>{
+  $('fs').querySelector('path').setAttribute('d', document.fullscreenElement ? FS_EXIT : FS_ENTER);
+  $('fs').title = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+});
 
 // drag to rotate
 let rot={x:0.5,y:-0.3}, drag=false, last={x:0,y:0};
