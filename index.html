@@ -232,6 +232,7 @@ const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.0,1.0); }`;
 const FRAG = `
 precision highp float;
 uniform vec2  uRes;
+uniform vec2  uOffset;   // screen-space shift (canvas px) to centre the cube beside the panel
 uniform float uTime;     // fluid time (already scaled by speed + audio)
 uniform vec2  uRot;      // yaw, pitch
 uniform float uBass, uMid, uTreble, uLevel, uBeat;
@@ -348,7 +349,7 @@ vec3 background(vec3 rd){
 }
 
 void main(){
-  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes - uOffset)/uRes.y;
   vec3 ro = vec3(0.0,0.15,4.7);
   vec3 rd = normalize(vec3(uv,-1.6));
   mat3 rot = rotY(uRot.x)*rotX(uRot.y);
@@ -456,7 +457,7 @@ gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
 
 const U = name => gl.getUniformLocation(prog,name);
 const u = {
-  res:U('uRes'), time:U('uTime'), rot:U('uRot'),
+  res:U('uRes'), offset:U('uOffset'), time:U('uTime'), rot:U('uRot'),
   bass:U('uBass'), mid:U('uMid'), treble:U('uTreble'), level:U('uLevel'), beat:U('uBeat'),
   react:U('uReact'), density:U('uDensity'), hue:U('uHue'), style:U('uStyle'), mode:U('uMode'),
   pulse:U('uPulse'), pulseT:U('uPulseT'), sat:U('uSat'),
@@ -469,7 +470,15 @@ function resize(){
   const w = Math.floor(innerWidth*renderScale), h = Math.floor(innerHeight*renderScale);
   if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; gl.viewport(0,0,w,h); }
 }
-addEventListener('resize', resize); resize();
+// shift the cube right so it centres in the space beside the controls panel
+let offsetX = 0;
+function updateOffset(){
+  const p = document.getElementById('panel');
+  const cssShift = p.classList.contains('hidden') ? 0 : p.getBoundingClientRect().right/2;
+  offsetX = cssShift * renderScale;
+}
+addEventListener('resize', ()=>{ resize(); updateOffset(); });
+resize(); updateOffset();
 
 // ---------- audio analysis ----------
 let actx, analyser, freq, srcNode;
@@ -602,9 +611,9 @@ $('style').onchange = ()=> ui.style=+$('style').value;
   el.oninput = ()=>{ ui[key]=hex2rgb(el.value); $('style').value='5'; ui.style=5; };
 });
 $('autorot').onchange = ()=> ui.autorot=$('autorot').checked;
-$('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); };
-$('hidePanel').onclick = ()=> $('panel').classList.add('hidden');
-$('toggle').onclick = ()=> $('panel').classList.remove('hidden');
+$('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); updateOffset(); };
+$('hidePanel').onclick = ()=>{ $('panel').classList.add('hidden'); updateOffset(); };
+$('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); updateOffset(); };
 
 // fullscreen toggle (native Fullscreen API)
 const FS_ENTER='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3';
@@ -643,6 +652,7 @@ function frame(now){
   resize();
   gl.useProgram(prog);
   gl.uniform2f(u.res, canvas.width, canvas.height);
+  gl.uniform2f(u.offset, offsetX, 0.0);
   gl.uniform1f(u.time, fluidTime);
   gl.uniform2f(u.rot, rot.x, rot.y);
   gl.uniform1f(u.bass, band.bass);
