@@ -350,7 +350,7 @@ float crystalField(vec3 p){
 }
 
 // spiral galaxy: arms + bright pulsing core + twinkling stars
-float galaxyField(vec3 p){
+float galaxyField(vec3 p, out float starOut){
   p.xz = r2(uTime*0.12 + uMid*0.5) * p.xz;            // spin the disk with the mids
   float r = length(p.xz);
   float a = atan(p.z, p.x);
@@ -363,10 +363,10 @@ float galaxyField(vec3 p){
   vec3 ip = floor(gp), fp = fract(gp)-0.5;
   vec3 jit = hash33(ip)-0.5;
   float sd = length(fp - jit*0.7);
-  float star = smoothstep(0.16, 0.0, sd) * step(0.68, hash(ip+vec3(9.3)));
-  star *= (0.4 + 0.6*sin(uTime*4.0 + hash(ip)*31.0)) * (0.7 + uTreble*1.8);
-  float starField = star * smoothstep(1.4, 0.0, r) * exp(-abs(p.y)*2.6);
-  return arms*1.6 + core*2.4 + starField*4.5;
+  float star = pow(smoothstep(0.13, 0.0, sd), 1.5) * step(0.6, hash(ip+vec3(9.3))); // tight, sharp points
+  star *= (0.5 + 0.5*sin(uTime*4.0 + hash(ip)*31.0)) * (0.9 + uTreble*1.6);
+  starOut = star * smoothstep(1.6, 0.0, r) * exp(-abs(p.y)*1.6);   // spread off the disk; handled separately as colored emissive
+  return arms*1.6 + core*2.4;
 }
 
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
@@ -490,6 +490,7 @@ void main(){
       float rq = length(q);
       if(uShape==1 ? rq>1.02 : (abs(q.x)>1.02||abs(q.y)>1.02||abs(q.z)>1.02)) break;
       float d;
+      vec3 starEmis = vec3(0.0);
       if(uMode==1){
         // ---- FRACTAL: kaliset sphere-folding field, dancing with the music ----
         d = fractalField(q) * uDensity * reactBoost;
@@ -497,8 +498,15 @@ void main(){
         // ---- CRYSTAL: faceted Voronoi lattice, glowing gem cells ----
         d = crystalField(q) * uDensity * reactBoost;
       } else if(uMode==3){
-        // ---- COSMOS: spiral galaxy with twinkling stars ----
-        d = galaxyField(q) * uDensity * reactBoost;
+        // ---- COSMOS: spiral galaxy; stars are sharp emissive points colored by the loudest band ----
+        float starI;
+        d = galaxyField(q, starI) * uDensity * reactBoost;
+        float bsum = uBass + uMid + uTreble;
+        // power-weight so the dominant band wins the hue (linear average muddies to grey)
+        float wb = uBass*uBass, wm = uMid*uMid, wt = uTreble*uTreble;
+        vec3 bandMix = (uBassCol*wb + uMidCol*wm + uTrebleCol*wt) / (wb + wm + wt + 1e-4);
+        vec3 starCol = mix(vec3(0.85,0.92,1.0), bandMix, smoothstep(0.06, 0.5, bsum)); // icy-white when quiet → band hue when loud
+        starEmis = starCol * starI * (10.0 + uTreble*8.0);
       } else {
         // ---- LIQUID: domain-warped fbm fluid with ridged veins ----
         vec3 sp = q*2.3;
@@ -522,7 +530,7 @@ void main(){
 
       vec3 e = fluidColor(d, q.y);
       float dens = d*1.7;
-      acc += trans * dens * e * dt * 12.0;
+      acc += trans * (dens * e + starEmis) * dt * 12.0;   // stars add as direct bright light, uncoupled from density
       trans *= exp(-dens*1.6*dt*12.0);
       q += marchDir*dt;
     }
