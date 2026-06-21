@@ -188,6 +188,11 @@
     <div class="glabel">Live spectrum</div>
     <div class="levels" id="levels"></div>
   </div>
+
+  <div class="group">
+    <div class="glabel">Renderer</div>
+    <div class="hint" id="gpuInfo">GPU (WebGL)</div>
+  </div>
 </div>
 
 <div class="player" id="player">
@@ -226,8 +231,14 @@ const audio = $('audio');
 
 // ---------- WebGL setup ----------
 const canvas = $('gl');
-const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+// prefer the discrete / high-performance GPU; opaque + no MSAA = less GPU work
+const glOpts = { powerPreference:'high-performance', antialias:false, alpha:false, depth:false, stencil:false };
+const gl = canvas.getContext('webgl', glOpts) || canvas.getContext('experimental-webgl', glOpts);
 if(!gl){ document.body.innerHTML = '<p style="color:#fff;padding:40px">WebGL not supported in this browser.</p>'; }
+// report which renderer the browser actually picked
+const glDbg = gl.getExtension('WEBGL_debug_renderer_info');
+const gpuName = glDbg ? gl.getParameter(glDbg.UNMASKED_RENDERER_WEBGL) : '';
+$('gpuInfo').textContent = gpuName ? '⚡ ' + gpuName.replace(/^ANGLE \(|\)$/g,'') : '⚡ GPU (WebGL) — name hidden by browser';
 
 const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.0,1.0); }`;
 
