@@ -186,6 +186,11 @@
     <label class="row">Audio tint <span class="v" id="tintV">0.0</span></label>
     <input class="seek" id="tint" type="range" min="0" max="1" step="0.01" value="0" style="width:100%">
     <div class="hint">Whole volume washes toward the loudest band. 0 = off.</div>
+    <div class="glabel" style="margin:10px 0 6px">Backdrop gradient · top · bottom</div>
+    <div class="swatches">
+      <input type="color" id="cBgTop" value="#080d16" title="Backdrop top">
+      <input type="color" id="cBgBot" value="#040509" title="Backdrop bottom">
+    </div>
   </div>
 
   <div class="group">
@@ -274,6 +279,7 @@ uniform float uReact, uDensity, uHue, uPulse, uPulseT, uSat;
 uniform vec3  uColLow, uColMid, uColHigh, uColCore, uColBase;
 uniform vec3  uBassCol, uMidCol, uTrebleCol;   // audio tint-wash colors
 uniform float uTintAmt;                         // 0 = off
+uniform vec3  uBgTop, uBgBot;                   // backdrop gradient (top, bottom)
 uniform int   uStyle, uMode, uShape;
 
 // ---- hash / value noise ----
@@ -444,7 +450,7 @@ vec3 fluidColor(float d, float y){
 
 vec3 background(vec3 rd){
   float g = 0.5+0.5*rd.y;
-  vec3 col = mix(vec3(0.015,0.02,0.035), vec3(0.03,0.05,0.085), g);
+  vec3 col = mix(uBgBot, uBgTop, g);
   // a few warm floating sparks (bokeh embers)
   for(int i=0;i<6;i++){
     float fi=float(i);
@@ -591,7 +597,8 @@ const u = {
   react:U('uReact'), density:U('uDensity'), hue:U('uHue'), style:U('uStyle'), mode:U('uMode'),
   pulse:U('uPulse'), pulseT:U('uPulseT'), sat:U('uSat'),
   colLow:U('uColLow'), colMid:U('uColMid'), colHigh:U('uColHigh'), colCore:U('uColCore'), colBase:U('uColBase'),
-  bassCol:U('uBassCol'), midCol:U('uMidCol'), trebleCol:U('uTrebleCol'), tintAmt:U('uTintAmt')
+  bassCol:U('uBassCol'), midCol:U('uMidCol'), trebleCol:U('uTrebleCol'), tintAmt:U('uTintAmt'),
+  bgTop:U('uBgTop'), bgBot:U('uBgBot')
 };
 const hex2rgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
 
@@ -726,7 +733,8 @@ discover();
 // ---------- UI bindings ----------
 const ui = { mode:0, shape:0, speed:1, autospeed:false, react:1, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
   low:[0.039,0.165,0.40], mid:[0.15,0.65,1.0], high:[0.498,0.878,1.0], core:[0.74,0.94,1.0], base:[1.0,0.48,0.12],
-  bassCol:[1.0,0.18,0.18], midCol:[0.215,1.0,0.368], trebCol:[0.227,0.627,1.0], tint:0 };
+  bassCol:[1.0,0.18,0.18], midCol:[0.215,1.0,0.368], trebCol:[0.227,0.627,1.0], tint:0,
+  bgTop:[0.031,0.051,0.086], bgBot:[0.016,0.020,0.035] };
 function bindRange(id,key,disp){ const el=$(id); el.oninput=()=>{ ui[key]=+el.value; if(disp) $(disp).textContent=(+el.value).toFixed(key==='hue'?0:1); }; el.oninput(); }
 bindRange('speed','speed','speedV');
 bindRange('react','react','reactV');
@@ -744,7 +752,7 @@ $('style').onchange = ()=> ui.style=+$('style').value;
   el.oninput = ()=>{ ui[key]=hex2rgb(el.value); $('style').value='5'; ui.style=5; };
 });
 // audio tint colors (independent of palette — don't force Custom)
-[['cBass','bassCol'],['cMidB','midCol'],['cTreb','trebCol']].forEach(([id,key])=>{
+[['cBass','bassCol'],['cMidB','midCol'],['cTreb','trebCol'],['cBgTop','bgTop'],['cBgBot','bgBot']].forEach(([id,key])=>{
   const el=$(id); el.oninput = ()=> ui[key]=hex2rgb(el.value);
 });
 bindRange('tint','tint','tintV');
@@ -762,7 +770,7 @@ $('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').s
 const STORE_KEY = 'fractalCube.settings';
 // colours come before 'style' so restoring a saved preset palette isn't forced to Custom
 const PERSIST_IDS = ['speed','autospeed','react','pulse','dens','hue','sat','spin','vol','autorot',
-  'cLow','cMid','cHigh','cCore','cBase','cBass','cMidB','cTreb','tint','mode','shape','style','quality'];
+  'cLow','cMid','cHigh','cCore','cBase','cBass','cMidB','cTreb','tint','cBgTop','cBgBot','mode','shape','style','quality'];
 function saveSettings(){
   try{
     const data={};
@@ -855,6 +863,8 @@ function frame(now){
   gl.uniform3fv(u.midCol, ui.midCol);
   gl.uniform3fv(u.trebleCol, ui.trebCol);
   gl.uniform1f(u.tintAmt, ui.tint);
+  gl.uniform3fv(u.bgTop, ui.bgTop);
+  gl.uniform3fv(u.bgBot, ui.bgBot);
   gl.drawArrays(gl.TRIANGLES,0,3);
 
   // spectrum bars from raw fft
