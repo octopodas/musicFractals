@@ -173,6 +173,8 @@
     <input class="seek" id="agcFloorMul" type="range" min="0.3" max="2" step="0.05" value="1" style="width:100%">
     <label class="row">AGC adapt <span class="v" id="agcDecayV">0.995</span></label>
     <input class="seek" id="agcDecay" type="range" min="0.95" max="0.999" step="0.001" value="0.995" style="width:100%">
+    <label class="row">Snap <span class="v" id="snapV">0.30</span></label>
+    <input class="seek" id="snap" type="range" min="0" max="1" step="0.05" value="0.3" style="width:100%">
     <label class="row">Pulse <span class="v" id="pulseV">1.0</span></label>
     <input class="seek" id="pulse" type="range" min="0" max="2.5" step="0.01" value="1" style="width:100%">
     <label class="row">Density <span class="v" id="densV">1.0</span></label>
@@ -722,12 +724,15 @@ function initAudio(){
 
 function analyze(){
   if(!analyser){ band.bass=band.mid=band.treble=band.level=0; beat*=0.9; return; }
+  // snap: one knob loosens all three smoothing layers together (0 = current, 1 = snappy)
+  analyser.smoothingTimeConstant = 0.78 - ui.snap*0.45;   // analyser FFT smoothing
   analyser.getByteFrequencyData(freq);
   const nyq = actx.sampleRate/2, bins = freq.length;
   const idx = hz => Math.min(bins-1, Math.round(hz/nyq*bins));
   const avg = (a,b)=>{ let s=0,n=0; for(let i=idx(a);i<=idx(b);i++){s+=freq[i];n++;} return n?s/n/255:0; };
-  // attack-fast decay-slow smoothing
-  const sm = (cur,t)=> t>cur ? t : cur*0.86+t*0.14;
+  // attack-fast decay-slow smoothing (snap loosens the decay)
+  const dec = 0.86 - ui.snap*0.40;
+  const sm = (cur,t)=> t>cur ? t : cur*dec+t*(1-dec);
   // per-band auto-gain: normalize each band to its own recent peak so naturally-quiet
   // bands (treble) swing full-scale; peak rises instantly, decays slowly, floored to gate silence
   const agc = (k,raw)=>{ peak[k] = Math.max(raw, peak[k]*ui.agcDecay, agcFloor[k]*ui.agcFloorMul); return Math.min(1, raw/peak[k]); };
@@ -738,7 +743,7 @@ function analyze(){
   // beat detection on bass energy
   bassAvg = bassAvg*0.92 + band.bass*0.08;
   if(band.bass > bassAvg*1.35 && band.bass > 0.25) beat = 1.0;
-  beat *= 0.90;
+  beat *= 0.90 - ui.snap*0.40;
   // spectral-centroid -> auto hue (pitch reactive)
   let num=0,den=0;
   for(let i=idx(80);i<idx(8000);i++){ num+=i*freq[i]; den+=freq[i]; }
@@ -819,7 +824,7 @@ async function discover(){
 discover();
 
 // ---------- UI bindings ----------
-const ui = { mode:0, shape:0, speed:1, autospeed:false, react:1, agcFloorMul:1, agcDecay:0.995, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
+const ui = { mode:0, shape:0, speed:1, autospeed:false, react:1, agcFloorMul:1, agcDecay:0.995, snap:0.3, pulse:1, dens:1, hue:0, sat:1, style:0, spin:0.3, autorot:true,
   low:[0.039,0.165,0.40], mid:[0.15,0.65,1.0], high:[0.498,0.878,1.0], core:[0.74,0.94,1.0], base:[1.0,0.48,0.12],
   bassCol:[1.0,0.18,0.18], midCol:[0.215,1.0,0.368], trebCol:[0.227,0.627,1.0], tint:0,
   bgTop:[0.031,0.051,0.086], bgBot:[0.016,0.020,0.035] };
@@ -828,6 +833,7 @@ bindRange('speed','speed','speedV');
 bindRange('react','react','reactV');
 $('agcFloorMul').oninput = ()=>{ ui.agcFloorMul=+$('agcFloorMul').value; $('agcFloorMulV').textContent=ui.agcFloorMul.toFixed(2); }; $('agcFloorMul').oninput();
 $('agcDecay').oninput    = ()=>{ ui.agcDecay=+$('agcDecay').value; $('agcDecayV').textContent=ui.agcDecay.toFixed(3); }; $('agcDecay').oninput();
+$('snap').oninput        = ()=>{ ui.snap=+$('snap').value; $('snapV').textContent=ui.snap.toFixed(2); }; $('snap').oninput();
 bindRange('pulse','pulse','pulseV');
 bindRange('dens','dens','densV');
 $('hue').oninput = ()=>{ ui.hue=+$('hue').value; $('hueV').textContent=Math.round(ui.hue*360); }; $('hue').oninput();
@@ -860,6 +866,7 @@ const SLIDER_HELP = {
   react: 'How strongly the music drives motion and brightness. Higher = more violent reaction to the audio.',
   agcFloorMul: 'Auto-gain floor. Each band (bass/mid/treble) is normalized to its own recent peak so quiet bands still register. Raise = a band must be louder to read full-scale (less sensitive); lower = more sensitive.',
   agcDecay: 'How fast auto-gain forgets a loud peak. Lower = adapts faster to quiet sections (quiet treble lights up sooner); higher = steadier, slower to re-amplify.',
+  snap: 'Loosens all three smoothing layers at once (analyser, band decay, beat decay). 0 = smooth/laggy, higher = snappier, more immediate reaction to the audio.',
   pulse: 'Strength of the brightness rings that travel outward from the centre on each beat.',
   dens:  'Thickness/opacity of the volume. Higher packs in more glowing material.',
   hue:   'Rotates every colour around the spectrum. 0 = palette unchanged.',
@@ -892,7 +899,7 @@ $('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').s
 // ---------- persist control settings (localStorage, per-origin) ----------
 const STORE_KEY = 'fractalCube.settings';
 // colours come before 'style' so restoring a saved preset palette isn't forced to Custom
-const PERSIST_IDS = ['speed','autospeed','react','agcFloorMul','agcDecay','pulse','dens','hue','sat','spin','vol','autorot',
+const PERSIST_IDS = ['speed','autospeed','react','agcFloorMul','agcDecay','snap','pulse','dens','hue','sat','spin','vol','autorot',
   'cLow','cMid','cHigh','cCore','cBase','cBass','cMidB','cTreb','tint','cBgTop','cBgBot','mode','shape','style','quality'];
 function saveSettings(){
   try{
