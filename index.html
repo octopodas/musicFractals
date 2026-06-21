@@ -540,8 +540,8 @@ void main(){
       // crisp glass rim: glow along whole cube edges (2nd-smallest of 1-|coord|)
       vec3 m = 1.0 - abs(entry);
       float edgeDist = (m.x+m.y+m.z) - min(m.x,min(m.y,m.z)) - max(m.x,max(m.y,m.z));
-      float edge = smoothstep(0.04, 0.0, edgeDist);
-      vec3 rim = mix(vec3(0.4,0.75,1.0), vec3(1.0), 0.4) * edge * (0.35 + uTreble*0.7);
+      float edge = smoothstep(0.018, 0.0, edgeDist);   // narrower, crisper rim
+      vec3 rim = mix(vec3(0.18,0.5,1.0), vec3(0.6,0.85,1.0), 0.25) * edge * (0.35 + uTreble*0.7);  // icy crystal blue
       // show interior through the glass, add reflection by fresnel, then rim on top
       col = mix(inside, reflCol, fres*0.5);
       col += rim + fres*0.12;
