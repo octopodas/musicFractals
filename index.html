@@ -191,6 +191,14 @@
       <input type="color" id="cBgTop" value="#080d16" title="Backdrop top">
       <input type="color" id="cBgBot" value="#040509" title="Backdrop bottom">
     </div>
+    <select id="bgPreset" style="width:100%;margin-top:8px">
+      <option value="">Preset gradient…</option>
+      <option value="#080d16|#040509">Midnight</option>
+      <option value="#2a1248|#050308">Deep Space</option>
+      <option value="#214a6b|#040d1a">Ocean</option>
+      <option value="#0c3d33|#03110d">Aurora</option>
+      <option value="#3a1e5c|#b5462a">Sunset</option>
+    </select>
   </div>
 
   <div class="group">
@@ -755,6 +763,14 @@ $('style').onchange = ()=> ui.style=+$('style').value;
 [['cBass','bassCol'],['cMidB','midCol'],['cTreb','trebCol'],['cBgTop','bgTop'],['cBgBot','bgBot']].forEach(([id,key])=>{
   const el=$(id); el.oninput = ()=> ui[key]=hex2rgb(el.value);
 });
+// backdrop presets just drive the two pickers (reuses their binding + persistence)
+$('bgPreset').onchange = ()=>{
+  const v=$('bgPreset').value; if(!v) return;
+  const [top,bot]=v.split('|');
+  const t=$('cBgTop'), b=$('cBgBot');
+  t.value=top; t.dispatchEvent(new Event('input'));
+  b.value=bot; b.dispatchEvent(new Event('input'));
+};
 bindRange('tint','tint','tintV');
 $('autospeed').onchange = ()=>{
   ui.autospeed = $('autospeed').checked;
