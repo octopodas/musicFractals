@@ -612,8 +612,8 @@ $('style').onchange = ()=> ui.style=+$('style').value;
 });
 $('autorot').onchange = ()=> ui.autorot=$('autorot').checked;
 $('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); updateOffset(); };
-$('hidePanel').onclick = ()=>{ $('panel').classList.add('hidden'); updateOffset(); };
-$('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); updateOffset(); };
+$('hidePanel').onclick = ()=>{ $('panel').classList.add('hidden'); $('toggle').style.display='grid'; updateOffset(); };
+$('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').style.display='none'; updateOffset(); };
 
 // fullscreen toggle (native Fullscreen API)
 const FS_ENTER='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3';
