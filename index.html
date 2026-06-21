@@ -630,6 +630,35 @@ $('quality').onchange = ()=>{ renderScale=+$('quality').value; resize(); updateO
 $('hidePanel').onclick = ()=>{ $('panel').classList.add('hidden'); $('toggle').style.display='grid'; updateOffset(); };
 $('toggle').onclick = ()=>{ $('panel').classList.remove('hidden'); $('toggle').style.display='none'; updateOffset(); };
 
+// ---------- persist control settings (localStorage, per-origin) ----------
+const STORE_KEY = 'fractalCube.settings';
+// colours come before 'style' so restoring a saved preset palette isn't forced to Custom
+const PERSIST_IDS = ['speed','react','pulse','dens','hue','sat','spin','vol','autorot',
+  'cLow','cMid','cHigh','cCore','cBase','mode','style','quality'];
+function saveSettings(){
+  try{
+    const data={};
+    PERSIST_IDS.forEach(id=>{ const el=$(id); if(el) data[id] = el.type==='checkbox' ? el.checked : el.value; });
+    localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  }catch(e){}
+}
+function restoreSettings(){
+  let data; try{ data=JSON.parse(localStorage.getItem(STORE_KEY)||'null'); }catch(e){}
+  if(!data) return;
+  PERSIST_IDS.forEach(id=>{
+    if(!(id in data)) return;
+    const el=$(id); if(!el) return;
+    if(el.type==='checkbox') el.checked = data[id];
+    else el.value = data[id];
+    el.dispatchEvent(new Event(el.tagName==='SELECT'||el.type==='checkbox' ? 'change' : 'input'));
+  });
+}
+restoreSettings();                       // apply saved values before wiring the save listeners
+let saveTimer;
+const scheduleSave = ()=>{ clearTimeout(saveTimer); saveTimer=setTimeout(saveSettings, 250); };
+document.addEventListener('input', scheduleSave);
+document.addEventListener('change', scheduleSave);
+
 // fullscreen toggle (native Fullscreen API)
 const FS_ENTER='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3';
 const FS_EXIT ='M5 8h1a2 2 0 0 0 2-2V5M16 5v1a2 2 0 0 0 2 2h1M19 16h-1a2 2 0 0 0-2 2v1M8 19v-1a2 2 0 0 0-2-2H5';
