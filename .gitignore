@@ -1,8 +1,9 @@
-# user-supplied audio (copyright) — keep only the generated demo
+# user-supplied audio (copyright) — keep only the generated demos
 tracks/*
 !tracks/README.md
 !tracks/tracks.json
 !tracks/test-tone.wav
+!tracks/showcase.wav
 
 prompt.txt
 __pycache__/
