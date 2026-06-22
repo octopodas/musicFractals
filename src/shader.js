@@ -307,13 +307,14 @@ void main(){
 
   vec3 col = background(rd);
 
-  vec3 nrm;
-  vec2 t = (uShape==1) ? sphereI(ro, rd, 1.0, nrm) : boxI(ro, rd, vec3(1.0), nrm);
+  vec3 nrm = vec3(0.0,0.0,1.0);
+  // uShape: 0 glass cube, 1 invisible sphere, 2 no container (march a depth slab so the field fills the canvas)
+  vec2 t = (uShape==2) ? vec2(3.3, 0.0) : (uShape==1) ? sphereI(ro, rd, 1.0, nrm) : boxI(ro, rd, vec3(1.0), nrm);
   if(t.x > 0.0){
     vec3 entry = ro + rd*t.x;
-    float fres = (uShape==1) ? 0.0 : pow(1.0 - max(dot(-rd,nrm),0.0), 4.0);
+    float fres = (uShape==0) ? pow(1.0 - max(dot(-rd,nrm),0.0), 4.0) : 0.0;
 
-    // cube refracts through the glass; the invisible sphere lets the ray pass straight
+    // cube refracts through the glass; sphere / no-container let the ray pass straight
     vec3 marchDir = rd;
     if(uShape==0){
       marchDir = refract(rd, nrm, 0.72);
@@ -322,7 +323,7 @@ void main(){
     vec3 q = entry + marchDir*0.02;
 
     const int STEPS = 64;
-    float dt = 0.032;
+    float dt = (uShape==2) ? 0.045 : 0.032;   // slightly longer reach to span the open slab
     vec3 acc = vec3(0.0);
     float trans = 1.0;
     float reactBoost = 1.0 + uReact*(uBass*1.6 + uBeat*1.2);
@@ -330,7 +331,7 @@ void main(){
     for(int i=0;i<STEPS;i++){
       if(trans < 0.02) break;
       float rq = length(q);
-      if(uShape==1 ? rq>1.02 : (abs(q.x)>1.02||abs(q.y)>1.02||abs(q.z)>1.02)) break;
+      if(uShape==0 ? (abs(q.x)>1.02||abs(q.y)>1.02||abs(q.z)>1.02) : (uShape==1 && rq>1.02)) break;
       float d;
       vec3 starEmis = vec3(0.0);
       if(uMode==1){
@@ -377,7 +378,8 @@ void main(){
       }
       // soft radial falloff so the mass floats inside the container
       float rr = rq;
-      d *= smoothstep(1.5, 0.45, rr);
+      if(uShape!=2) d *= smoothstep(1.5, 0.45, rr);   // others keep the mass centred
+      else d *= 1.35;                                  // no container: compensate for the spread so the open field stays vivid
       // radial pulse: brightness rings travel from the centre to the sides on the beat
       float ring = 0.5 + 0.5*sin(rr*9.0 - uPulseT*4.0);
       d *= 1.0 + uPulse*(0.30 + uBass*1.1 + uBeat*1.7)*ring;
@@ -396,8 +398,8 @@ void main(){
     acc += vec3(0.3,0.6,1.0)*uBeat*uReact*0.15;
 
     vec3 inside = acc;
-    if(uShape==1){
-      // invisible sphere: just the emissive volume composited over the background
+    if(uShape>=1){
+      // invisible sphere / no container: just the emissive volume composited over the background
       col = inside + col*trans;
     } else {
       vec3 reflCol = background(reflect(rd,nrm)) * (0.6+uMid*0.5);

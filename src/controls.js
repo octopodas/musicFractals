@@ -87,7 +87,8 @@ export function initControls() {
   };
   // mode change also reveals the ink-only controls when Ink in liquid (7) is selected
   $('mode').onchange = () => { ui.mode = +$('mode').value; $('inkControls').style.display = ui.mode === 7 ? '' : 'none'; };
-  $('shape').onchange = () => ui.shape = +$('shape').value;
+  // no-container (2) has no cube to rotate, so hide the Cube controls then
+  $('shape').onchange = () => { ui.shape = +$('shape').value; $('cubeControls').style.display = ui.shape === 2 ? 'none' : ''; };
   $('style').onchange = () => ui.style = +$('style').value;
   // custom palette color pickers (selecting one also jumps to the Custom palette)
   [['cLow', 'low'], ['cMid', 'mid'], ['cHigh', 'high'], ['cCore', 'core'], ['cBase', 'base']].forEach(([id, key]) => {
