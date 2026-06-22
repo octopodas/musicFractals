@@ -1,23 +1,28 @@
-# Build: "Fractal Glass Cube" — an audio-reactive music visualizer (single HTML file)
+# Build: "Fractal Glass Cube" — an audio-reactive music visualizer
 
 > A self-contained requirements prompt. Hand this to any capable coding model to
 > reproduce the full app. It specifies *what* to build and the exact behaviors and
 > parameters, but leaves the implementation to the model.
 
-Build a complete, self-contained, real-time **audio-reactive music visualizer** as ONE
-`index.html` file. The centerpiece is mesmerizing, liquid, colorful volumetric effects
-rendered inside a semi-transparent 3D container (a glass cube), changing to the rhythm
-and pitch of music playback. It must play real local audio tracks and expose rich
-controls. Make it genuinely compelling, not a tech demo.
+Build a complete, real-time **audio-reactive music visualizer** as a small static web
+app. The centerpiece is mesmerizing, liquid, colorful volumetric effects rendered inside
+a semi-transparent 3D container (a glass cube), changing to the rhythm and pitch of music
+playback. It must play real local audio tracks, capture live system/mic audio, and expose
+rich controls. Make it genuinely compelling, not a tech demo.
 
 ## Hard constraints
-- **Single file**, no build step, **no external dependencies or CDNs** (must run offline
-  by opening the file or via a static server).
+- **No external dependencies or CDNs, no build step.** Plain HTML/CSS/JS only.
+- Organize the JavaScript as **native ES modules** (`<script type="module">`), one file
+  per responsibility (shader, renderer, audio, capture, player, controls, entry point).
+  Because ES modules don't load over `file://`, the app is **served** by a static server.
 - **All visuals rendered on the GPU** via a WebGL fragment shader doing **volumetric
   raymarching** on a fullscreen triangle. No per-pixel CPU work.
 - Request a **high-performance GPU** context (prefer discrete GPU), opaque canvas, no
   MSAA/depth/stencil. Detect and display the active GPU/renderer name; gracefully handle
   WebGL being unavailable or the renderer name being masked.
+- **Recover from a lost GPU context:** listen for `webglcontextlost` (preventDefault) and
+  `webglcontextrestored` (rebuild program, buffer, and uniform locations) so a driver
+  reset self-heals without a page reload; skip drawing while the context is lost.
 - Smooth 60fps target on a mid-range GPU; provide a quality/resolution-scale control.
 
 ## Container (the shape holding the visuals)
@@ -34,7 +39,7 @@ A top-level **Container** selector, independent of the visualization mode:
   container. A soft radial falloff fades the volume toward the container surface.
 
 ## Visualization modes (the field marched inside the container)
-A **Mode** selector with four distinct volumetric fields, all audio-reactive and sharing
+A **Mode** selector with seven distinct volumetric fields, all audio-reactive and sharing
 the color system:
 1. **Liquid** — domain-warped fractal (FBM) noise fluid with bright ridged "veins"
    threading through a smooth body; flowing, morphing motion.
@@ -46,7 +51,15 @@ the color system:
    flare on the beat, cell centers drift over time.
 4. **Cosmos** — a spiral galaxy: two winding arms, a bright nucleus, and a field of
    twinkling stars; the disk spins with the mids, the core throbs on bass/beat, stars
-   shimmer with treble.
+   shimmer with treble. Stars are sharp emissive points colored by the loudest band
+   (icy-white when quiet → band hue when loud, power-weighted to the dominant band).
+5. **Bioluminescence** — drifting glow blobs each on their own orbit, ridged "vein"
+   tendrils, and treble sparkle; the whole field slowly warps and curls and breathes on bass.
+6. **Singularity** — an accretion disk spiralling into a blazing core with a **dark event
+   horizon**; inner matter whips around faster (gravity), two arms wind inward, the core
+   throbs on bass/beat, and each beat sends shockwave rings outward.
+7. **Wormhole** — a ribbed tunnel funnelling to a bright vanishing point, ribs rushing past
+   the viewer, with a gentle twist down the throat; the core throbs on bass.
 
 Each mode must look clearly different from the others and "dance" to the music.
 
@@ -63,22 +76,58 @@ Each mode must look clearly different from the others and "dance" to the music.
 - **Hue shift** slider (0–360°), and **Saturation** slider (0 = greyscale, 1 = normal, up
   to 2 = boosted) — both apply to every palette including presets.
 - Pitch reactivity: a spectral-centroid value subtly shifts the hue automatically.
+- **Audio tint** (independent of palette): three band color pickers — **Bass / Mid /
+  Treble** (defaults `#ff2e2e` / `#37ff5e` / `#3aa0ff`) — and an **Audio tint** slider
+  (0–1, default 0). The slider washes the whole volume toward the loudest band's color,
+  preserving the bright/dark structure; 0 = off. (These band colors also drive the Cosmos
+  star coloring.)
+- **Backdrop gradient:** two color pickers for the background **top** and **bottom**
+  (defaults `#080d16` / `#040509`), plus a **preset gradient** dropdown (Midnight, Deep
+  Space, Ocean, Aurora, Sunset) that just drives the two pickers.
 
 ## Audio analysis
 - Use the Web Audio API: an `<audio>` element → MediaElementSource → AnalyserNode
-  (FFT size 2048, smoothing ~0.78) → destination. Create the source once.
+  (FFT size 2048, smoothing ~0.78) → destination. Create the source once. Keep the
+  analyser as a leaf (off the output path) so a captured live stream can drive it without
+  echoing to the speakers.
 - Each frame compute normalized energy for **bass (~20–160 Hz)**, **mid (~160–1800 Hz)**,
   **treble (~1800–9000 Hz)**, and overall **level (~20–12 kHz)**, with **attack-fast /
   decay-slow** smoothing (jump up instantly, fall off gradually).
+- **Per-band auto-gain (AGC):** normalize each band to its own recent rolling peak so
+  naturally-quiet bands (treble) still swing full-scale. The peak rises instantly, decays
+  slowly, and is floored to gate silence. Expose two knobs:
+  - **AGC floor** (0.3–2, default 1) scales the per-band floor (higher = a band must be
+    louder to read full-scale; less sensitive).
+  - **AGC adapt** (0.95–0.999, default 0.995) is the peak decay rate (lower = adapts faster
+    to quiet sections; higher = steadier).
+- **Snap** (0–1, default 0.3): one knob that loosens all three smoothing layers together
+  (analyser FFT smoothing, band attack/decay, and beat decay). 0 = smooth/laggy, 1 = snappy.
 - **Beat detection** on bass energy vs a running average (trigger when bass exceeds ~1.35×
   the average and above a floor); the beat value decays after each hit.
 - **Spectral centroid** → drives the automatic hue shift (pitch).
 - Show a **live spectrum** bar display in the panel.
 
+## Live audio capture (no file needed)
+Two independent ways to feed the visualizer from a live source instead of the file; only
+**one capture is active at a time** (enabling one disables the other), and both **reset on
+reload** (not persisted). Route the captured stream into the analyser in place of the file
+and do **not** connect it to the destination (no echo). Use clean constraints for music
+(echo cancellation, noise suppression, and auto-gain **off**).
+- **🎧 System audio** (`getDisplayMedia`): capture another app via screen-share. Guide the
+  user (Chrome: pick a *Tab* + "Share tab audio"; system-wide only on Windows). If the
+  shared source has no audio track, warn and abort. Auto-uncheck when the user clicks
+  "Stop sharing".
+- **🎤 Mic / Monitor** (`getUserMedia`): capture an input device, with a **device picker**
+  populated from the available audio inputs (labels appear once the site has mic
+  permission). On Linux, a *"Monitor of …"* source captures all system audio with no extra
+  software. Handle a busy/blocked default device by still opening the picker so the user can
+  choose another source; switching the select swaps the live device.
+
 ## Reactive mappings (how audio drives the visuals)
-- Bass/beat → density, brightness, fractal fold strength, crystal cell scale, galaxy core.
+- Bass/beat → density, brightness, fractal fold strength, crystal cell scale, galaxy core,
+  singularity core + shockwave rings, wormhole core.
 - Mids → container/disk rotation speed, reflection strength.
-- Treble → shimmer/filaments, star twinkle, crystal edge flare, rim glow.
+- Treble → shimmer/filaments, star twinkle, crystal edge flare, rim glow, bio sparkle.
 - Beat → a brightness flash and acceleration of the radial pulse.
 
 ## Effects
@@ -92,19 +141,25 @@ Each mode must look clearly different from the others and "dance" to the music.
   manually.
 
 ## Controls panel (glassmorphism, collapsible)
-A floating control panel with these controls. Show numeric value next to each slider.
+A floating control panel with these controls. Show numeric value next to each slider, and
+a small **"?" help icon** on each slider that toggles a one-line explanation.
 Ranges/defaults:
 - **Tracks:** dropdown selector; "＋ Add audio files" file picker; drag-and-drop anywhere.
-- **Mode:** Liquid / Fractal / Crystal / Cosmos.
+- **System audio** toggle and **Mic / Monitor** toggle + device dropdown (see Live capture).
+- **Mode:** Liquid / Fractal / Crystal / Cosmos / Bioluminescence / Singularity / Wormhole.
 - **Container:** Cube (glass) / Sphere (invisible).
 - **Palette:** the 5 presets + Custom.
 - **Speed:** 0–3, default 1 (+ the Sync-speed-to-beat toggle).
 - **Reactivity:** 0–6, default 1 (global audio sensitivity).
+- **AGC floor:** 0.3–2, default 1. **AGC adapt:** 0.95–0.999, default 0.995.
+- **Snap:** 0–1, default 0.3.
 - **Pulse:** 0–2.5, default 1.
 - **Density:** 0.3–2, default 1.
 - **Hue shift:** 0–360°, default 0.
 - **Saturation:** 0–2, default 1.
 - **Custom colors:** five color pickers (Low/Body/High/Core/Base).
+- **Audio tint:** three band color pickers (Bass/Mid/Treble) + tint amount 0–1, default 0.
+- **Backdrop gradient:** top/bottom color pickers + a preset-gradient dropdown.
 - **Auto-rotate** toggle (default on) + **Spin speed** 0–1.5, default 0.3
   (rotation also nudged by the mids). Plus **drag the container with the mouse to rotate**.
 - **Quality:** render-resolution scale Low/Med/High (≈0.6 / 0.8 / 1.0), default Med.
@@ -137,16 +192,21 @@ advance to the next track on end. Play/pause icon reflects state.
 - Player bar sits at bottom-left and must not overlap the panel.
 
 ## Persistence
-- Persist **all control settings** (mode, container, palette, all five custom colors, every
-  slider, all toggles, quality, volume) in `localStorage` and restore them on load so they
+- Persist **all control settings** (mode, container, palette, all custom colors, the audio-
+  tint band colors + amount, the backdrop gradient colors, every slider including AGC and
+  Snap, all toggles, quality, volume) in `localStorage` and restore them on load so they
   survive page reloads / server relaunches. Restore by applying saved values through the
   normal control handlers (restore colors before palette so a saved preset isn't forced to
-  Custom). Note that localStorage is per-origin (port matters).
+  Custom). Live capture state is intentionally **not** persisted. Note that localStorage is
+  per-origin (port matters).
 
 ## Acceptance criteria
 - Opening the page (served) auto-loads any audio in `tracks/`; pressing play makes the
   chosen mode visibly react to the music in real time (rhythm and pitch).
-- All four modes render distinctly; both containers work for every mode; the sphere shows
+- All seven modes render distinctly; both containers work for every mode; the sphere shows
   no visible shell.
+- System-audio and mic/monitor capture each drive the visuals from a live source with no
+  echo, and only one is active at a time.
 - Every control changes the visuals as described; settings persist across reloads.
-- No external network requests; runs offline; renders on the GPU.
+- A lost GPU context recovers without a reload.
+- No external network requests; no build step; renders on the GPU.
