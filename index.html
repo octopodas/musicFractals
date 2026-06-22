@@ -55,6 +55,7 @@
       <select id="shape" style="width:150px">
         <option value="0">Cube (glass)</option>
         <option value="1">Sphere (invisible)</option>
+        <option value="2">None (fullscreen)</option>
       </select>
     </label>
     <label class="row">Palette
@@ -132,20 +133,13 @@
     </select>
   </div>
 
-  <div class="group">
+  <div class="group" id="cubeControls">
     <div class="glabel">Cube</div>
     <label class="row">Auto-rotate
       <input type="checkbox" id="autorot" checked style="width:auto">
     </label>
     <label class="row">Spin speed <span class="v" id="spinV">0.3</span></label>
     <input class="seek" id="spin" type="range" min="0" max="1.5" step="0.01" value="0.3" style="width:100%">
-    <label class="row">Quality
-      <select id="quality" style="width:120px">
-        <option value="0.6">Low</option>
-        <option value="0.8" selected>Medium</option>
-        <option value="1">High</option>
-      </select>
-    </label>
     <div class="hint">Drag the cube to rotate manually.</div>
   </div>
 
@@ -156,6 +150,13 @@
 
   <div class="group">
     <div class="glabel">Renderer</div>
+    <label class="row">Quality
+      <select id="quality" style="width:120px">
+        <option value="0.6">Low</option>
+        <option value="0.8" selected>Medium</option>
+        <option value="1">High</option>
+      </select>
+    </label>
     <div class="hint" id="gpuInfo">GPU (WebGL)</div>
   </div>
 </div>
