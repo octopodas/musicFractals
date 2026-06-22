@@ -143,6 +143,11 @@ export function initControls() {
   $('quality').onchange = () => { setRenderScale(+$('quality').value); };
   $('hidePanel').onclick = () => { $('panel').classList.add('hidden'); $('toggle').style.display = 'grid'; updateOffset(); };
   $('toggle').onclick = () => { $('panel').classList.remove('hidden'); $('toggle').style.display = 'none'; updateOffset(); };
+  // collapse the playback bar to a small icon in its bottom-left corner (and back)
+  $('playerToggle').onclick = () => {
+    const collapsed = $('player').classList.toggle('collapsed');
+    $('playerToggle').title = collapsed ? 'Show player' : 'Collapse player';
+  };
 
   // fullscreen toggle (native Fullscreen API)
   const FS_ENTER = 'M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3';
