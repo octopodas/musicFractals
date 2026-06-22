@@ -43,6 +43,7 @@ function buildGL() {
     react: U('uReact'), density: U('uDensity'), hue: U('uHue'), style: U('uStyle'), mode: U('uMode'),
     pulse: U('uPulse'), pulseT: U('uPulseT'), sat: U('uSat'),
     chromaHue: U('uChromaHue'), chromaStr: U('uChromaStr'), centroid: U('uCentroid'), chromaAmt: U('uChromaAmt'),
+    inkFlow: U('uInkFlow'), inkColor: U('uInkColor'), inkCrisp: U('uInkCrisp'),
     colLow: U('uColLow'), colMid: U('uColMid'), colHigh: U('uColHigh'), colCore: U('uColCore'), colBase: U('uColBase'),
     bassCol: U('uBassCol'), midCol: U('uMidCol'), trebleCol: U('uTrebleCol'), tintAmt: U('uTintAmt'),
     bgTop: U('uBgTop'), bgBot: U('uBgBot')
@@ -105,6 +106,9 @@ export function draw({ ui, analysis, rot, time, pulseT }) {
   gl.uniform1f(u.chromaStr, analysis.chromaStr);
   gl.uniform1f(u.centroid, analysis.centroid);
   gl.uniform1f(u.chromaAmt, ui.chroma);
+  gl.uniform1f(u.inkFlow, ui.inkFlow);
+  gl.uniform1f(u.inkColor, ui.inkColor);
+  gl.uniform1f(u.inkCrisp, ui.inkCrisp);
   gl.uniform3fv(u.colLow, ui.low);
   gl.uniform3fv(u.colMid, ui.mid);
   gl.uniform3fv(u.colHigh, ui.high);
