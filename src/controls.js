@@ -9,7 +9,7 @@ import { toggleSysAudio, toggleMicAudio, selectMicDevice } from './capture.js';
 const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
 export const ui = {
-  mode: 0, shape: 0, speed: 1, autospeed: false, react: 1, agcFloorMul: 1, agcDecay: 0.995, snap: 0.3, pulse: 1, dens: 1, hue: 0, sat: 1, chroma: 0.8, style: 0, spin: 0.3, autorot: true, inkFlow: 1, inkColor: 1, inkCrisp: 0.5,
+  mode: 0, shape: 0, speed: 1, autospeed: false, react: 1, agcFloorMul: 1, agcDecay: 0.995, snap: 0.3, pulse: 1, dens: 1, hue: 0, sat: 1, chroma: 0.8, style: 0, spin: 0.3, autorot: true, inkFlow: 1, inkFlowAuto: false, inkColor: 1, inkCrisp: 0.5,
   low: [0.039, 0.165, 0.40], mid: [0.15, 0.65, 1.0], high: [0.498, 0.878, 1.0], core: [0.74, 0.94, 1.0], base: [1.0, 0.48, 0.12],
   bassCol: [1.0, 0.18, 0.18], midCol: [0.215, 1.0, 0.368], trebCol: [0.227, 0.627, 1.0], tint: 0,
   bgTop: [0.031, 0.051, 0.086], bgBot: [0.016, 0.020, 0.035]
@@ -36,7 +36,7 @@ const SLIDER_HELP = {
 // ---------- persist control settings (localStorage, per-origin) ----------
 const STORE_KEY = 'fractalCube.settings';
 // colours come before 'style' so restoring a saved preset palette isn't forced to Custom
-const PERSIST_IDS = ['speed', 'autospeed', 'react', 'agcFloorMul', 'agcDecay', 'snap', 'pulse', 'dens', 'hue', 'sat', 'chroma', 'inkFlow', 'inkColor', 'inkCrisp', 'spin', 'vol', 'autorot',
+const PERSIST_IDS = ['speed', 'autospeed', 'react', 'agcFloorMul', 'agcDecay', 'snap', 'pulse', 'dens', 'hue', 'sat', 'chroma', 'inkFlow', 'inkFlowAuto', 'inkColor', 'inkCrisp', 'spin', 'vol', 'autorot',
   'cLow', 'cMid', 'cHigh', 'cCore', 'cBase', 'cBass', 'cMidB', 'cTreb', 'tint', 'cBgTop', 'cBgBot', 'mode', 'shape', 'style', 'quality'];
 function saveSettings() {
   try {
@@ -79,6 +79,12 @@ export function initControls() {
   bindRange('inkFlow', 'inkFlow', 'inkFlowV');
   bindRange('inkColor', 'inkColor', 'inkColorV');
   bindRange('inkCrisp', 'inkCrisp', 'inkCrispV');
+  // ink flow speed can be beat-driven instead of manual (dims the slider, like Sync speed to beat)
+  $('inkFlowAuto').onchange = () => {
+    ui.inkFlowAuto = $('inkFlowAuto').checked;
+    $('inkFlow').style.opacity = ui.inkFlowAuto ? 0.45 : 1;
+    if (!ui.inkFlowAuto) $('inkFlowV').textContent = (+$('inkFlow').value).toFixed(1);
+  };
   // mode change also reveals the ink-only controls when Ink in liquid (7) is selected
   $('mode').onchange = () => { ui.mode = +$('mode').value; $('inkControls').style.display = ui.mode === 7 ? '' : 'none'; };
   $('shape').onchange = () => ui.shape = +$('shape').value;

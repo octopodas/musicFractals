@@ -81,7 +81,7 @@ export const contextLost = () => gl.isContextLost();
 // Draw one frame. `state` carries live references (no per-frame copies):
 //   ui       — control settings, analysis — audio bands+beat+hueAuto,
 //   rot      — {x,y} camera rotation, time — fluid time, pulseT — pulse phase.
-export function draw({ ui, analysis, rot, time, pulseT }) {
+export function draw({ ui, analysis, rot, time, pulseT, inkFlow }) {
   resize();
   gl.useProgram(prog);
   gl.uniform2f(u.res, canvas.width, canvas.height);
@@ -106,7 +106,7 @@ export function draw({ ui, analysis, rot, time, pulseT }) {
   gl.uniform1f(u.chromaStr, analysis.chromaStr);
   gl.uniform1f(u.centroid, analysis.centroid);
   gl.uniform1f(u.chromaAmt, ui.chroma);
-  gl.uniform1f(u.inkFlow, ui.inkFlow);
+  gl.uniform1f(u.inkFlow, inkFlow);
   gl.uniform1f(u.inkColor, ui.inkColor);
   gl.uniform1f(u.inkCrisp, ui.inkCrisp);
   gl.uniform3fv(u.colLow, ui.low);
