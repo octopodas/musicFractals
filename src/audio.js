@@ -2,17 +2,21 @@
 // bass/mid/treble/level + beat + auto-hue, and exposes the small graph hooks
 // (useCapture/stopCapture) that capture.js uses to swap in a live stream.
 import { $ } from './util.js';
+import { chromaFromFreq } from './chroma.js';
 
 export const audioEl = $('audio');
 
 // Live analysis read by the renderer + main loop each frame (mutated in place).
-export const analysis = { bass: 0, mid: 0, treble: 0, level: 0, beat: 0, hueAuto: 0 };
+// centroid 0..1 = spectral brightness (low→high); chromaHue/chromaStr = dominant
+// pitch class as hue + how tonal (vs atonal/percussive) it is.
+export const analysis = { bass: 0, mid: 0, treble: 0, level: 0, beat: 0, hueAuto: 0, centroid: 0, chromaHue: 0, chromaStr: 0 };
 
 let actx, analyser, freq, srcNode;
 // per-band rolling peaks for auto-gain; floors double as init and gate silence
 const agcFloor = { bass: 0.35, mid: 0.20, treble: 0.10 };
 const peak = { bass: 0.35, mid: 0.20, treble: 0.10 };
 let bassAvg = 0;
+let chromaVX = 0, chromaVY = 0;   // smoothed chroma vector (circular smoothing of hue+strength)
 
 export const getFreq = () => freq;   // raw FFT bins for the spectrum bars (undefined until initAudio)
 
@@ -57,6 +61,16 @@ export function analyze(ui) {
   for (let i = idx(80); i < idx(8000); i++) { num += i * freq[i]; den += freq[i]; }
   const cen = den ? (num / den) / bins : 0;
   analysis.hueAuto += ((cen) - analysis.hueAuto) * 0.05;
+  // centroid as Hz, log-mapped ~200Hz..5kHz -> 0..1 (perceptual brightness)
+  const centHz = den ? (num / den) * nyq / bins : 0;
+  const cnorm = centHz > 0 ? Math.min(1, Math.max(0, (Math.log2(centHz) - 7.64) / 4.65)) : 0;
+  analysis.centroid += (cnorm - analysis.centroid) * 0.08;
+  // dominant pitch -> hue, smoothed as a vector so the hue wraps cleanly and atonal frames fade strength
+  const ch = chromaFromFreq(freq, actx.sampleRate, bins);
+  chromaVX += (ch.str * Math.cos(6.2831853 * ch.hue) - chromaVX) * 0.12;
+  chromaVY += (ch.str * Math.sin(6.2831853 * ch.hue) - chromaVY) * 0.12;
+  analysis.chromaHue = (Math.atan2(chromaVY, chromaVX) / 6.2831853 + 1) % 1;
+  analysis.chromaStr = Math.min(1, Math.hypot(chromaVX, chromaVY));
 }
 
 // ---------- live capture: route a MediaStream into the analyser instead of the file ----------

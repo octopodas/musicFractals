@@ -9,7 +9,7 @@ import { toggleSysAudio, toggleMicAudio, selectMicDevice } from './capture.js';
 const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
 export const ui = {
-  mode: 0, shape: 0, speed: 1, autospeed: false, react: 1, agcFloorMul: 1, agcDecay: 0.995, snap: 0.3, pulse: 1, dens: 1, hue: 0, sat: 1, style: 0, spin: 0.3, autorot: true,
+  mode: 0, shape: 0, speed: 1, autospeed: false, react: 1, agcFloorMul: 1, agcDecay: 0.995, snap: 0.3, pulse: 1, dens: 1, hue: 0, sat: 1, chroma: 0.8, style: 0, spin: 0.3, autorot: true,
   low: [0.039, 0.165, 0.40], mid: [0.15, 0.65, 1.0], high: [0.498, 0.878, 1.0], core: [0.74, 0.94, 1.0], base: [1.0, 0.48, 0.12],
   bassCol: [1.0, 0.18, 0.18], midCol: [0.215, 1.0, 0.368], trebCol: [0.227, 0.627, 1.0], tint: 0,
   bgTop: [0.031, 0.051, 0.086], bgBot: [0.016, 0.020, 0.035]
@@ -28,6 +28,7 @@ const SLIDER_HELP = {
   dens: 'Thickness/opacity of the volume. Higher packs in more glowing material.',
   hue: 'Rotates every colour around the spectrum. 0 = palette unchanged.',
   sat: 'Colour intensity. 0 = greyscale, 1 = normal, above 1 = boosted.',
+  chroma: 'How strongly the dominant musical pitch rotates the palette’s colours. Notes/chords shift the hue; brightness (spectral centroid) adds a warm↔cool tint that fades in when the pitch is unclear. 0 = off.',
   tint: 'Washes the whole volume toward the loudest band’s colour (bass/mid/treble). 0 = off.',
   spin: 'How fast the scene auto-rotates (only when Auto-rotate is on).',
 };
@@ -35,7 +36,7 @@ const SLIDER_HELP = {
 // ---------- persist control settings (localStorage, per-origin) ----------
 const STORE_KEY = 'fractalCube.settings';
 // colours come before 'style' so restoring a saved preset palette isn't forced to Custom
-const PERSIST_IDS = ['speed', 'autospeed', 'react', 'agcFloorMul', 'agcDecay', 'snap', 'pulse', 'dens', 'hue', 'sat', 'spin', 'vol', 'autorot',
+const PERSIST_IDS = ['speed', 'autospeed', 'react', 'agcFloorMul', 'agcDecay', 'snap', 'pulse', 'dens', 'hue', 'sat', 'chroma', 'spin', 'vol', 'autorot',
   'cLow', 'cMid', 'cHigh', 'cCore', 'cBase', 'cBass', 'cMidB', 'cTreb', 'tint', 'cBgTop', 'cBgBot', 'mode', 'shape', 'style', 'quality'];
 function saveSettings() {
   try {
@@ -74,6 +75,7 @@ export function initControls() {
   $('hue').oninput = () => { ui.hue = +$('hue').value; $('hueV').textContent = Math.round(ui.hue * 360); }; $('hue').oninput();
   bindRange('spin', 'spin', 'spinV');
   bindRange('sat', 'sat', 'satV');
+  bindRange('chroma', 'chroma', 'chromaV');
   $('mode').onchange = () => ui.mode = +$('mode').value;
   $('shape').onchange = () => ui.shape = +$('shape').value;
   $('style').onchange = () => ui.style = +$('style').value;
