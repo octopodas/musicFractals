@@ -268,6 +268,71 @@ button:hover {
   width: min(420px, calc(100vw - 340px))
 }
 
+/* collapse/expand toggle — sits top-right when open, becomes the whole icon when collapsed */
+.player-toggle {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  z-index: 1
+}
+
+.player-toggle:hover {
+  color: var(--accent)
+}
+
+.player-toggle .ic-close {
+  width: 14px;
+  height: 14px
+}
+
+.player-toggle .ic-open {
+  display: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--accent)
+}
+
+.player .nowplaying {
+  padding-right: 26px
+}
+
+/* collapsed: shrink in place to a small icon anchored at the player's bottom-left corner */
+.player.collapsed,
+.panel:not(.hidden)~.player.collapsed {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden
+}
+
+.player.collapsed>:not(.player-toggle) {
+  display: none
+}
+
+.player.collapsed .player-toggle {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent
+}
+
+.player.collapsed .ic-close {
+  display: none
+}
+
+.player.collapsed .ic-open {
+  display: block
+}
+
 .nowplaying {
   display: flex;
   align-items: center;
