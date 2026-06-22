@@ -5,6 +5,7 @@ tracks/*
 !tracks/test-tone.wav
 !tracks/showcase.wav
 !tracks/bass-demo.wav
+!tracks/melodic-demo.wav
 
 prompt.txt
 __pycache__/
