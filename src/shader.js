@@ -12,6 +12,7 @@ uniform float uTime;     // fluid time (already scaled by speed + audio)
 uniform vec2  uRot;      // yaw, pitch
 uniform float uBass, uMid, uTreble, uLevel, uBeat;
 uniform float uReact, uDensity, uHue, uPulse, uPulseT, uSat;
+uniform float uChromaHue, uChromaStr, uCentroid, uChromaAmt;   // dominant pitch hue, tonal strength, spectral brightness, pitch→color amount
 uniform vec3  uColLow, uColMid, uColHigh, uColCore, uColBase;
 uniform vec3  uBassCol, uMidCol, uTrebleCol;   // audio tint-wash colors
 uniform float uTintAmt;                         // 0 = off
@@ -192,6 +193,13 @@ vec2 sphereI(vec3 ro, vec3 rd, float rad, out vec3 nrm){
 
 vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){ return a + b*cos(6.28318*(c*t+d)); }
 
+// rotate a color's hue by angle a about the luma (1,1,1) axis — preserves brightness
+vec3 hueShift(vec3 col, float a){
+  const vec3 k = vec3(0.57735026);   // normalize(vec3(1))
+  float c = cos(a), s = sin(a);
+  return col*c + cross(k, col)*s + k*dot(k, col)*(1.0 - c);
+}
+
 // style-driven emissive color from density d and height y (-1..1)
 vec3 fluidColor(float d, float y){
   float t = clamp(d*0.9 + uHue, 0.0, 2.0);
@@ -231,6 +239,18 @@ vec3 fluidColor(float d, float y){
     float blum = dot(col, vec3(0.299,0.587,0.114));
     col = mix(col, blum * bandCol * 2.0, uTintAmt);
   }
+  // spectral temperature: warm/cool tint from brightness, but recede where a pitch is
+  // confident (chroma owns hue then). bass darkening below isn't pitch-gated, so it fires under chords too.
+  float warm = 0.5 - uCentroid;                                  // + low/warm, − high/cool
+  col += uChromaAmt * (1.0 - uChromaStr) * 0.18 * vec3(warm, warm*0.15, -warm);
+  col += uChromaAmt * uTreble * uCentroid * 0.12 * vec3(0.6,0.85,1.0);   // icy highlight bloom on bright/airy content
+  col *= 1.0 - uChromaAmt * uBass*uBass*0.25;                     // bass drop dims the field (not pitch-gated, so it fires under chords)
+  col = max(col, 0.0);
+  // pitch → hue: blend toward the palette rotated by the dominant pitch class. Rotating by the FULL
+  // angle makes the 0↔1 hue wrap a full turn (= identity), so a pitch sitting on A (hue≈0/1) never
+  // snaps; strength × amount is the blend toward that target rather than a scale on the angle.
+  vec3 rotated = hueShift(col, 6.2831853 * uChromaHue);
+  col = max(mix(col, rotated, clamp(uChromaStr * uChromaAmt, 0.0, 1.0)), 0.0);
   // saturation: 0 = greyscale, 1 = normal, >1 = boosted
   float lum = dot(col, vec3(0.299,0.587,0.114));
   return max(mix(vec3(lum), col, uSat), 0.0);
