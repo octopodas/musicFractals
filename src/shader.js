@@ -44,21 +44,26 @@ mat2 r2(float a){ float c=cos(a),s=sin(a); return mat2(c,-s,s,c); }
 
 // Kali / Star-Nest volumetric fractal -> glowing fractal foam filling the cube.
 // The fold offset, strength and rotation are driven by the music so it "dances".
-float fractalField(vec3 p){
+float fractalField(vec3 p, out float cc){
   p *= 1.4;
   p.xz = r2(uTime*0.09 + uMid*0.8) * p.xz;   // tumble with the mids
   p.xy = r2(uTime*0.06) * p.xy;
   float strength = 6.5 + 2.5*uReact*(uBass + uBeat*0.7);
   vec3 offs = vec3(-0.5, -0.78 + 0.14*sin(uTime*0.35), -1.1);
-  float accum = 0.0, prev = 0.0, tw = 0.0;
+  float accum = 0.0, prev = 0.0, tw = 0.0, cacc = 0.0, trap = 1e9;
   for(int i=0;i<16;i++){
     float mag = dot(p,p);
     p = abs(p)/mag + offs;                    // sphere inversion fold
     float w = exp(-float(i)/7.0);
-    accum += w * exp(-strength * abs(mag - prev));
+    float c = w * exp(-strength * abs(mag - prev));
+    accum += c;
+    cacc += c * float(i);                     // which fold depth is glowing here
     tw += w;
     prev = mag;
+    trap = min(trap, mag);                    // orbit trap: closest fold approach
   }
+  float depth = (accum > 1e-5) ? cacc / accum : 0.0;
+  cc = fract(depth*0.16 + log2(trap + 1.0)*0.45);   // fold depth + orbit trap -> 0..1 colour coord
   return max(0.0, 4.2*accum/tw - 0.6);
 }
 
@@ -111,30 +116,6 @@ float galaxyField(vec3 p, out float starOut){
   star *= (0.5 + 0.5*sin(uTime*4.0 + hash(ip)*31.0)) * (0.9 + uTreble*1.6);
   starOut = star * smoothstep(1.6, 0.0, r) * exp(-abs(p.y)*1.6);   // spread off the disk; handled separately as colored emissive
   return arms*1.6 + core*2.4;
-}
-
-// bioluminescence: drifting glow blobs + trailing tendrils, breathing on bass, sparkling on treble
-float bioField(vec3 p){
-  // slow organic warp so the whole field drifts and curls
-  vec3 q = p + 0.28*vec3(
-    fbm(p*1.3 + vec3(0.0,  uTime*0.15, 0.0)),
-    fbm(p*1.3 + vec3(3.1, -uTime*0.12, 1.7)),
-    fbm(p*1.3 + vec3(1.2,  2.4, uTime*0.10)));
-  float breathe = 0.7 + 0.3*sin(uTime*0.8) + uBass*1.0;   // slow swell + bass pulse
-  float blobs = 0.0;
-  for(int i=0;i<5;i++){
-    float fi=float(i);
-    vec3 c = 0.72*vec3(sin(uTime*0.20+fi*2.4),
-                       cos(uTime*0.17+fi*1.7)*0.7,
-                       sin(uTime*0.23+fi*3.1));   // each blob drifts on its own orbit
-    vec3 dv = q - c;
-    blobs += exp(-dot(dv,dv)*5.0);
-  }
-  blobs *= breathe;
-  float veins = 1.0 - abs(2.0*fbm(q*2.2 + uTime*0.10) - 1.0);   // ridged filaments
-  float tendrils = pow(veins, 6.0) * 0.7;
-  float spark = pow(max(fbm(q*7.0 - uTime*0.6), 0.0), 3.0) * uTreble * 1.4;   // treble shimmer
-  return blobs*0.6 + tendrils + spark;
 }
 
 // singularity: accretion disk spiralling into a blazing core, with a dark event horizon
@@ -334,9 +315,10 @@ void main(){
       if(uShape==0 ? (abs(q.x)>1.02||abs(q.y)>1.02||abs(q.z)>1.02) : (uShape==1 && rq>1.02)) break;
       float d;
       vec3 starEmis = vec3(0.0);
+      float fracCC = 0.0;
       if(uMode==1){
-        // ---- FRACTAL: kaliset sphere-folding field, dancing with the music ----
-        d = fractalField(q) * uDensity * reactBoost;
+        // ---- FRACTAL: kaliset sphere-folding field; coloured by fold geometry for multicolour foam ----
+        d = fractalField(q, fracCC) * uDensity * reactBoost;
       } else if(uMode==2){
         // ---- CRYSTAL: faceted Voronoi lattice, glowing gem cells ----
         d = crystalField(q) * uDensity * reactBoost;
@@ -350,9 +332,6 @@ void main(){
         vec3 bandMix = (uBassCol*wb + uMidCol*wm + uTrebleCol*wt) / (wb + wm + wt + 1e-4);
         vec3 starCol = mix(vec3(0.85,0.92,1.0), bandMix, smoothstep(0.06, 0.5, bsum)); // icy-white when quiet → band hue when loud
         starEmis = starCol * starI * (10.0 + uTreble*8.0);
-      } else if(uMode==4){
-        // ---- BIOLUMINESCENCE: drifting glow blobs with trailing tendrils ----
-        d = bioField(q) * uDensity * reactBoost;
       } else if(uMode==5){
         // ---- SINGULARITY: accretion disk spiralling into a dark core ----
         d = singularityField(q) * uDensity * reactBoost;
@@ -385,6 +364,8 @@ void main(){
       d *= 1.0 + uPulse*(0.30 + uBass*1.1 + uBeat*1.7)*ring;
 
       vec3 e = fluidColor(d, q.y);
+      // fractal: spin hue with the fold geometry so the foam reads as rich multicolour
+      if(uMode==1) e = hueShift(e, 6.2831853*fracCC);
       // ink flows through colours as it falls: hue sweeps with height, drifting downward with the flow
       if(uMode==7) e = hueShift(e, 6.2831853*(q.y*0.45 + uTime*0.06*uInkColor));
       float dens = d*1.7;
