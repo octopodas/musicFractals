@@ -37,6 +37,9 @@ function frame(now) {
   beatSpeed += (beatTarget - beatSpeed) * (beatTarget > beatSpeed ? 0.65 : 0.30); // snap up fast, ease down quicker so each beat punches
   const speed = ui.autospeed ? ui.speed * beatSpeed : ui.speed;
   if (ui.autospeed) $('speedV').textContent = speed.toFixed(1);
+  // ink flow can ride the same beat tempo instead of the manual slider
+  const inkFlow = ui.inkFlowAuto ? 0.3 + beatSpeed * 0.5 : ui.inkFlow;
+  if (ui.inkFlowAuto) $('inkFlowV').textContent = inkFlow.toFixed(1);
 
   // fluid time surges with music
   const drive = 0.35 + ui.react * (analysis.level * 1.4 + analysis.beat * 1.5);
@@ -46,7 +49,7 @@ function frame(now) {
 
   if (ui.autorot && !drag) rot.x += dt * ui.spin * (0.6 + analysis.mid * 1.5);
 
-  draw({ ui, analysis, rot, time: fluidTime, pulseT });
+  draw({ ui, analysis, rot, time: fluidTime, pulseT, inkFlow });
 
   // spectrum bars from raw fft
   const freq = getFreq();
