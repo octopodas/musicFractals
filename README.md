@@ -1,29 +1,29 @@
 # Fractal Glass Cube — Music Visualizer
 
 An audio-reactive volumetric visualizer that ray-marches a glowing volume inside a
-semi-transparent glass cube (or an invisible sphere). One WebGL fragment shader does
-the rendering — no dependencies, no build step.
+semi-transparent glass cube — or an invisible sphere, or no container at all (fullscreen).
+One WebGL fragment shader does the rendering — no dependencies, no build step.
 
 ![modes: 7](https://img.shields.io/badge/modes-7-4cc5ff) ![deps: none](https://img.shields.io/badge/deps-none-success)
 
 Everything reacts to the track in real time: bass + beat detection pump density and
-brightness (rhythm), spectral centroid shifts the hue (pitch), and mids drive the
-spin and fold rotation. Per-band auto-gain keeps naturally-quiet bands (treble)
-swinging full-scale.
+brightness (rhythm), the dominant musical pitch rotates the palette's hue while spectral
+brightness shifts its temperature (pitch → colour), and mids drive the spin and fold
+rotation. Per-band auto-gain keeps naturally-quiet bands (treble) swinging full-scale.
 
 ## Visualizations
 
 Seven **modes** — the shape of the volume:
 
 - **Liquid** — domain-warped fluid with cyan veins and a molten base.
-- **Fractal** — a Kali / Star-Nest sphere-folding field; intricate foam that folds and tumbles.
+- **Fractal** — a Kali / Star-Nest sphere-folding field; intricate foam that folds and tumbles, coloured by its fold geometry so it reads as rich multicolour.
 - **Crystal** — faceted Voronoi lattice with glowing gem cells, flaring on the beat.
 - **Cosmos** — spiral galaxy: winding arms, a pulsing core, and twinkling stars.
-- **Bioluminescence** — drifting glow blobs with trailing tendrils, breathing on bass.
 - **Singularity** — an accretion disk spiralling into a dark event horizon.
 - **Wormhole** — a ribbed tunnel funnelling to a bright vanishing point.
+- **Ink in liquid** — dye streamers flowing endlessly downward, sweeping through colours as they fall.
 
-Two **containers** (Cube glass / Sphere invisible) and six **palettes**
+Three **containers** (Cube glass / Sphere invisible / None — fullscreen) and six **palettes**
 (Liquid Cyan · Plasma · Nebula · Inferno · Aurora · Custom).
 
 ## Run it
@@ -50,14 +50,15 @@ A generated `tracks/test-tone.wav` is included as a demo. Your own music stays l
 
 | | |
 |---|---|
-| **Mode / Container / Palette** | volume shape, glass cube or invisible sphere, colour ramp |
+| **Mode / Container / Palette** | volume shape; glass cube, invisible sphere, or fullscreen; colour ramp |
 | **Speed / Sync speed to beat** | animation speed; optionally let the beat drive the tempo |
 | **Reactivity / Density / Pulse** | audio sensitivity, fill, beat-driven brightness rings |
 | **AGC floor / AGC adapt / Snap** | per-band auto-gain sensitivity + adaptation, and smoothing tightness |
-| **Hue / Saturation / Audio tint** | colour shift, intensity, wash toward the loudest band |
+| **Hue / Saturation / Pitch → Color / Audio tint** | colour shift, intensity, pitch-driven palette rotation, wash toward the loudest band |
+| **Ink in liquid** | flow speed (with beat-sync), colour-cycle speed, streamer crispness (shown only in that mode) |
 | **Custom colors / Backdrop** | per-density colour stops + background gradient (with presets) |
 | **Auto-rotate / Spin / Quality** | scene motion and render scale (drag the cube to rotate) |
-| **Player** | track selector, play/pause, prev/next, seek, volume, live spectrum |
+| **Player** | track selector, play/pause, prev/next, seek, volume, live spectrum, collapse to a corner icon |
 
 ## Code layout
 
@@ -67,7 +68,8 @@ ES modules under `src/`, each with one responsibility:
 |---|---|
 | `shader.js` | GLSL vertex + fragment source (the raymarcher) |
 | `renderer.js` | WebGL context, shader build, context-loss recovery, per-frame draw |
-| `audio.js` | Web Audio graph + analysis (bass/mid/treble/level/beat/hue) |
+| `audio.js` | Web Audio graph + analysis (bass/mid/treble/level/beat/centroid/chroma) |
+| `chroma.js` | pure pitch-class (chroma) extraction from the FFT — dominant-pitch hue + tonal strength |
 | `capture.js` | live system-audio and mic/monitor stream capture |
 | `player.js` | playlist, transport, file add/drop, track auto-discovery |
 | `controls.js` | settings state, panel bindings, help, persistence |

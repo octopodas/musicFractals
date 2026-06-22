@@ -35,8 +35,13 @@ A top-level **Container** selector, independent of the visualization mode:
   transparent** — no glass shell, no edges, no refraction, no rim. March straight through
   and composite the emissive volume over the background so it reads as a glowing orb with
   the background visible around/through it.
+- **None (fullscreen):** no container — march a depth slab along every ray with no spatial
+  bound and drop the radial falloff so the field fills the whole canvas edge to edge
+  (composite emissively over the background, like the sphere). The cube-only controls
+  (auto-rotate, spin) hide while this is selected.
 - The same volumetric field, palette, and all controls must work identically in either
-  container. A soft radial falloff fades the volume toward the container surface.
+  bounded container (cube/sphere); a soft radial falloff fades the volume toward the
+  container surface. The fullscreen option drops that falloff so it fills the view.
 
 ## Visualization modes (the field marched inside the container)
 A **Mode** selector with seven distinct volumetric fields, all audio-reactive and sharing
@@ -45,7 +50,9 @@ the color system:
    threading through a smooth body; flowing, morphing motion.
 2. **Fractal** — a Kali / "Star-Nest" style sphere-folding orbit-trap field producing
    glowing fractal foam that folds, tumbles, and pulses (the fold strength/offset and
-   rotation are driven by the music).
+   rotation are driven by the music). Hue is driven by the fold geometry (orbit trap +
+   dominant fold depth) so the foam reads as rich multicolour, not just the palette's
+   low/core stops.
 3. **Crystal** — a 3D Voronoi/Worley cellular lattice rendered as a faceted crystal/geode:
    thin glowing facet edges plus soft glowing gem cores; cell scale grows with bass, edges
    flare on the beat, cell centers drift over time.
@@ -53,13 +60,15 @@ the color system:
    twinkling stars; the disk spins with the mids, the core throbs on bass/beat, stars
    shimmer with treble. Stars are sharp emissive points colored by the loudest band
    (icy-white when quiet → band hue when loud, power-weighted to the dominant band).
-5. **Bioluminescence** — drifting glow blobs each on their own orbit, ridged "vein"
-   tendrils, and treble sparkle; the whole field slowly warps and curls and breathes on bass.
-6. **Singularity** — an accretion disk spiralling into a blazing core with a **dark event
+5. **Singularity** — an accretion disk spiralling into a blazing core with a **dark event
    horizon**; inner matter whips around faster (gravity), two arms wind inward, the core
    throbs on bass/beat, and each beat sends shockwave rings outward.
-7. **Wormhole** — a ribbed tunnel funnelling to a bright vanishing point, ribs rushing past
+6. **Wormhole** — a ribbed tunnel funnelling to a bright vanishing point, ribs rushing past
    the viewer, with a gentle twist down the throat; the core throbs on bass.
+7. **Ink in liquid** — ink poured in at the top, flowing endlessly downward in braided
+   streamers that diffuse into feathery tendrils; the noise scrolls down so it never repeats
+   and the dye sweeps through colours as it falls. Has its own controls (flow speed with an
+   optional beat-sync, colour-cycle speed, streamer crispness), shown only in this mode.
 
 Each mode must look clearly different from the others and "dance" to the music.
 
@@ -75,7 +84,11 @@ Each mode must look clearly different from the others and "dance" to the music.
   Defaults: Low `#0a2a66`, Body `#26a6ff`, High `#7fe0ff`, Core `#bcf0ff`, Base `#ff7a1e`.
 - **Hue shift** slider (0–360°), and **Saturation** slider (0 = greyscale, 1 = normal, up
   to 2 = boosted) — both apply to every palette including presets.
-- Pitch reactivity: a spectral-centroid value subtly shifts the hue automatically.
+- **Pitch → colour:** octave-fold the FFT onto the 12-tone circle for the dominant pitch
+  class and rotate the palette's hue toward it (strength = how tonal the moment is); spectral
+  brightness (centroid) adds a warm↔cool temperature that recedes when the pitch is confident.
+  A **Pitch → Color** slider scales it; the rotation is relative so each palette keeps its
+  identity. (A spectral-centroid value also still nudges the auto-hue.)
 - **Audio tint** (independent of palette): three band color pickers — **Bass / Mid /
   Treble** (defaults `#ff2e2e` / `#37ff5e` / `#3aa0ff`) — and an **Audio tint** slider
   (0–1, default 0). The slider washes the whole volume toward the loudest band's color,
@@ -146,8 +159,8 @@ a small **"?" help icon** on each slider that toggles a one-line explanation.
 Ranges/defaults:
 - **Tracks:** dropdown selector; "＋ Add audio files" file picker; drag-and-drop anywhere.
 - **System audio** toggle and **Mic / Monitor** toggle + device dropdown (see Live capture).
-- **Mode:** Liquid / Fractal / Crystal / Cosmos / Bioluminescence / Singularity / Wormhole.
-- **Container:** Cube (glass) / Sphere (invisible).
+- **Mode:** Liquid / Fractal / Crystal / Cosmos / Singularity / Wormhole / Ink in liquid.
+- **Container:** Cube (glass) / Sphere (invisible) / None (fullscreen).
 - **Palette:** the 5 presets + Custom.
 - **Speed:** 0–3, default 1 (+ the Sync-speed-to-beat toggle).
 - **Reactivity:** 0–6, default 1 (global audio sensitivity).
@@ -157,19 +170,25 @@ Ranges/defaults:
 - **Density:** 0.3–2, default 1.
 - **Hue shift:** 0–360°, default 0.
 - **Saturation:** 0–2, default 1.
+- **Pitch → Color:** 0–1, default 0.8 (strength of the pitch-driven hue rotation; 0 = off).
 - **Custom colors:** five color pickers (Low/Body/High/Core/Base).
 - **Audio tint:** three band color pickers (Bass/Mid/Treble) + tint amount 0–1, default 0.
+- **Ink in liquid** (shown only in that mode): **Flow speed** 0–3 default 1 with a **Sync
+  flow to beat** toggle, **Color cycle** 0–3 default 1, **Streamer crispness** 0–1 default 0.5.
 - **Backdrop gradient:** top/bottom color pickers + a preset-gradient dropdown.
-- **Auto-rotate** toggle (default on) + **Spin speed** 0–1.5, default 0.3
-  (rotation also nudged by the mids). Plus **drag the container with the mouse to rotate**.
-- **Quality:** render-resolution scale Low/Med/High (≈0.6 / 0.8 / 1.0), default Med.
+- **Auto-rotate** toggle (default on) + **Spin speed** 0–1.5, default 0.3 (rotation also
+  nudged by the mids; both hidden in the fullscreen container). Plus **drag the container
+  with the mouse to rotate**.
+- **Quality:** render-resolution scale Low/Med/High (≈0.6 / 0.8 / 1.0), default Med
+  (lives with the Renderer readout).
 - **Live spectrum** display and a **Renderer** (GPU name) readout.
 - Dropdown option text must be readable (dark background, light text).
 
 ## Music player (transport)
 A separate player bar (bottom-left): scrolling track title, current/total time, seek bar,
 previous / play-pause / next buttons, volume slider, and a small beat indicator. Auto-
-advance to the next track on end. Play/pause icon reflects state.
+advance to the next track on end. Play/pause icon reflects state. A small toggle collapses
+the bar in place to an icon in its bottom-left corner (and expands it back).
 
 ## Track loading ("real tracks in the page folder")
 - A `tracks/` folder holds the audio. Because a static page can't list a directory,
