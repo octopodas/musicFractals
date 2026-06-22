@@ -13,6 +13,7 @@ uniform vec2  uRot;      // yaw, pitch
 uniform float uBass, uMid, uTreble, uLevel, uBeat;
 uniform float uReact, uDensity, uHue, uPulse, uPulseT, uSat;
 uniform float uChromaHue, uChromaStr, uCentroid, uChromaAmt;   // dominant pitch hue, tonal strength, spectral brightness, pitch→color amount
+uniform float uInkFlow, uInkColor, uInkCrisp;                  // ink mode: downward flow speed, colour-cycle speed, streamer crispness
 uniform vec3  uColLow, uColMid, uColHigh, uColCore, uColBase;
 uniform vec3  uBassCol, uMidCol, uTrebleCol;   // audio tint-wash colors
 uniform float uTintAmt;                         // 0 = off
@@ -162,6 +163,33 @@ float wormholeField(vec3 p){
   wall *= 0.35 + 0.65*ribs;
   float core = exp(-r*4.5) * dd * (1.2 + uBass*2.0);   // bright vanishing point, throbs on bass
   return wall*1.6 + core*2.2;
+}
+
+// ink in liquid: ink poured in at the top, flowing endlessly downward in braided streamers that
+// diffuse into feathery tendrils. The noise field scrolls down over time so the flow never repeats.
+// (colour sweeps with height + time in the march loop — see uMode==7 there.)
+float inkField(vec3 p){
+  float t = uTime;
+  vec3 flow = vec3(0.0, t*0.5*uInkFlow, 0.0);            // sample noise higher over time -> features fall downward
+  // domain warp (also scrolling) so the descending ink curls and braids rather than falling straight
+  vec3 q = p + 0.38*vec3(
+    fbm(p*1.3 + flow*0.7),
+    fbm(p*1.3 + flow*0.7 + vec3(3.1)),
+    fbm(p*1.3 + flow*0.7 + vec3(5.7)));
+  // a few descending streamers: ink gathered around vertical columns that snake in x,z with height
+  float crisp = 4.5 + (uInkCrisp - 0.5)*7.0;             // tighter columns = crisper streamers (0.5 = default look)
+  float ink = 0.0;
+  for(int i=0;i<3;i++){
+    float fi = float(i);
+    float cx = 0.45*sin(fi*2.1 + q.y*1.4 + t*0.25);
+    float cz = 0.45*cos(fi*1.7 + q.y*1.2 + t*0.20);
+    float dist = length(vec2(q.x - cx, q.z - cz));
+    ink += exp(-dist*dist*crisp);
+  }
+  // feathery filaments at the diffusing fronts (signature of ink spreading), also scrolling down
+  float strand = pow(1.0 - abs(2.0*fbm(q*4.5 + flow) - 1.0), 3.0) * (0.7 + uTreble*1.3);
+  ink *= (0.45 + strand*1.5) * (1.0 + uBeat*0.8);
+  return ink * 2.4;
 }
 
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
@@ -330,6 +358,9 @@ void main(){
       } else if(uMode==6){
         // ---- WORMHOLE: ribbed tunnel funnelling to a vanishing point ----
         d = wormholeField(q) * uDensity * reactBoost;
+      } else if(uMode==7){
+        // ---- INK: dye puffs blooming and feathering into the liquid ----
+        d = inkField(q) * uDensity * reactBoost;
       } else {
         // ---- LIQUID: domain-warped fbm fluid with ridged veins ----
         vec3 sp = q*2.3;
@@ -352,6 +383,8 @@ void main(){
       d *= 1.0 + uPulse*(0.30 + uBass*1.1 + uBeat*1.7)*ring;
 
       vec3 e = fluidColor(d, q.y);
+      // ink flows through colours as it falls: hue sweeps with height, drifting downward with the flow
+      if(uMode==7) e = hueShift(e, 6.2831853*(q.y*0.45 + uTime*0.06*uInkColor));
       float dens = d*1.7;
       acc += trans * (dens * e + starEmis) * dt * 12.0;   // stars add as direct bright light, uncoupled from density
       trans *= exp(-dens*1.6*dt*12.0);
