@@ -73,10 +73,11 @@ vec3 hash33(vec3 p){
            dot(p,vec3(113.5,271.9,124.6)));
   return fract(sin(p)*43758.5453123);
 }
-// 3D cellular noise -> nearest (F1) and 2nd nearest (F2) feature-point distances
-vec2 worley(vec3 p){
+// 3D cellular noise -> nearest (F1) and 2nd nearest (F2) feature-point distances; cell = nearest cell coord
+vec2 worley(vec3 p, out vec3 cell){
   vec3 ip = floor(p), fp = fract(p);
   float f1 = 9.0, f2 = 9.0;
+  cell = ip;
   for(int x=-1;x<=1;x++)
   for(int y=-1;y<=1;y++)
   for(int z=-1;z<=1;z++){
@@ -85,24 +86,26 @@ vec2 worley(vec3 p){
     o = 0.5 + 0.5*sin(uTime*0.7 + 6.2831853*o);   // animate the gem centres
     vec3 d = g + o - fp;
     float dd = dot(d,d);
-    if(dd<f1){ f2=f1; f1=dd; } else if(dd<f2){ f2=dd; }
+    if(dd<f1){ f2=f1; f1=dd; cell=ip+g; } else if(dd<f2){ f2=dd; }
   }
   return sqrt(vec2(f1,f2));
 }
 // faceted crystal lattice: glowing cell edges + soft gem cores, flaring on the beat
-float crystalField(vec3 p){
+float crystalField(vec3 p, out float cc){
   float scale = 3.0 + uBass*1.2;
-  vec2 w = worley(p*scale);
+  vec3 cell; vec2 w = worley(p*scale, cell);
   float edge = 1.0 - smoothstep(0.0, 0.06 + uTreble*0.05, w.y - w.x); // thin glowing facets
   float gem  = smoothstep(0.75, 0.0, w.x);                            // soft glow toward centres
+  cc = hash(cell);                                                    // per-gem hue -> stained-glass facets
   return edge*(1.0 + uReact*uBeat*1.6) + gem*0.35;
 }
 
 // spiral galaxy: arms + bright pulsing core + twinkling stars
-float galaxyField(vec3 p, out float starOut){
+float galaxyField(vec3 p, out float starOut, out float cc){
   p.xz = r2(uTime*0.12 + uMid*0.5) * p.xz;            // spin the disk with the mids
   float r = length(p.xz);
   float a = atan(p.z, p.x);
+  cc = fract(a*0.15915 + r*0.55 + uTime*0.02);        // hue winds around the disk + out along the arms
   float spiral = pow(0.5 + 0.5*cos(2.0*a + r*7.0 - uTime*0.9), 2.0); // two arms winding out
   float disk = exp(-abs(p.y)*5.0) * exp(-r*1.3);                     // dense near the plane
   float arms = disk * spiral;
@@ -119,11 +122,12 @@ float galaxyField(vec3 p, out float starOut){
 }
 
 // singularity: accretion disk spiralling into a blazing core, with a dark event horizon
-float singularityField(vec3 p){
+float singularityField(vec3 p, out float cc){
   float r = length(p.xz);
   float swirl = uTime*0.5 + 1.5/(r+0.22);          // inner matter whips around faster (gravity)
   p.xz = r2(swirl) * p.xz;
   float a = atan(p.z, p.x);
+  cc = fract((a*2.0 + r*9.0 - uTime*1.2)*0.15915);  // hue follows the spiralling arms into the core
   float disk = exp(-abs(p.y)*(7.0 + 6.0*exp(-r*2.0))) * smoothstep(1.3, 0.12, r);  // thin disk on the plane
   float arms = pow(0.5 + 0.5*cos(a*2.0 + r*9.0 - uTime*1.2), 2.0);                  // two arms winding in
   disk *= 0.35 + 0.65*arms;
@@ -134,10 +138,11 @@ float singularityField(vec3 p){
 }
 
 // wormhole: a ribbed tunnel funnelling to a bright vanishing point, rushing past the viewer
-float wormholeField(vec3 p){
+float wormholeField(vec3 p, out float cc){
   float dd = smoothstep(1.0, -1.0, p.z);            // 0 at the near mouth → 1 at the far end
   p.xy = r2(p.z*0.8 + uTime*0.2) * p.xy;            // gentle twist down the throat
   float r = length(p.xy);
+  cc = fract(p.z*0.6 - uTime*0.25 + atan(p.y,p.x)*0.15915);  // colour rings rushing down the throat
   float radius = 0.85 - 0.6*dd;                     // funnels narrower toward the far end
   float wall = exp(-pow((r - radius)*6.0, 2.0));    // glowing tube wall
   float ribs = 0.5 + 0.5*sin(p.z*11.0 - uTime*5.0 + atan(p.y,p.x)*3.0);  // ribs rushing toward the viewer
@@ -315,17 +320,17 @@ void main(){
       if(uShape==0 ? (abs(q.x)>1.02||abs(q.y)>1.02||abs(q.z)>1.02) : (uShape==1 && rq>1.02)) break;
       float d;
       vec3 starEmis = vec3(0.0);
-      float fracCC = 0.0;
+      float fracCC = 0.0, liqCC = 0.0, geomCC = 0.0;
       if(uMode==1){
         // ---- FRACTAL: kaliset sphere-folding field; coloured by fold geometry for multicolour foam ----
         d = fractalField(q, fracCC) * uDensity * reactBoost;
       } else if(uMode==2){
         // ---- CRYSTAL: faceted Voronoi lattice, glowing gem cells ----
-        d = crystalField(q) * uDensity * reactBoost;
+        d = crystalField(q, geomCC) * uDensity * reactBoost;
       } else if(uMode==3){
         // ---- COSMOS: spiral galaxy; stars are sharp emissive points colored by the loudest band ----
         float starI;
-        d = galaxyField(q, starI) * uDensity * reactBoost;
+        d = galaxyField(q, starI, geomCC) * uDensity * reactBoost;
         float bsum = uBass + uMid + uTreble;
         // power-weight so the dominant band wins the hue (linear average muddies to grey)
         float wb = uBass*uBass, wm = uMid*uMid, wt = uTreble*uTreble;
@@ -334,10 +339,10 @@ void main(){
         starEmis = starCol * starI * (10.0 + uTreble*8.0);
       } else if(uMode==5){
         // ---- SINGULARITY: accretion disk spiralling into a dark core ----
-        d = singularityField(q) * uDensity * reactBoost;
+        d = singularityField(q, geomCC) * uDensity * reactBoost;
       } else if(uMode==6){
         // ---- WORMHOLE: ribbed tunnel funnelling to a vanishing point ----
-        d = wormholeField(q) * uDensity * reactBoost;
+        d = wormholeField(q, geomCC) * uDensity * reactBoost;
       } else if(uMode==7){
         // ---- INK: dye puffs blooming and feathering into the liquid ----
         d = inkField(q) * uDensity * reactBoost;
@@ -354,6 +359,8 @@ void main(){
         d += pow(veins, 5.0) * 0.7;
         d *= uDensity * reactBoost;
         d += uReact*uTreble*0.4*pow(smoothstep(0.62,0.92,warp.x),4.0);
+        // colour coord from the flow geometry (domain warp + ridged veins) -> multicolour, like fractal's fold trap
+        liqCC = fract(0.8*warp.x + 0.5*warp.z + 0.3*veins + 0.15*q.y);
       }
       // soft radial falloff so the mass floats inside the container
       float rr = rq;
@@ -366,6 +373,10 @@ void main(){
       vec3 e = fluidColor(d, q.y);
       // fractal: spin hue with the fold geometry so the foam reads as rich multicolour
       if(uMode==1) e = hueShift(e, 6.2831853*fracCC);
+      // liquid: spin hue with the flow geometry so the fluid reads as rich multicolour (same idea)
+      if(uMode==0 || uMode==4) e = hueShift(e, 6.2831853*liqCC);
+      // crystal / cosmos / singularity / wormhole: spin hue with each field's own geometry for multicolour
+      if(uMode==2 || uMode==3 || uMode==5 || uMode==6) e = hueShift(e, 6.2831853*geomCC);
       // ink flows through colours as it falls: hue sweeps with height, drifting downward with the flow
       if(uMode==7) e = hueShift(e, 6.2831853*(q.y*0.45 + uTime*0.06*uInkColor));
       float dens = d*1.7;
