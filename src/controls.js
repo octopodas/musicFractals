@@ -9,7 +9,7 @@ import { toggleSysAudio, toggleMicAudio, selectMicDevice } from './capture.js';
 const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
 export const ui = {
-  mode: 0, shape: 0, speed: 1, autospeed: false, react: 1, agcFloorMul: 1, agcDecay: 0.995, snap: 0.3, pulse: 1, dens: 1, hue: 0, sat: 1, chroma: 0.8, style: 0, spin: 0.3, autorot: true, inkFlow: 1, inkFlowAuto: false, inkColor: 1, inkCrisp: 0.5,
+  mode: 0, shape: 0, speed: 1, autospeed: true, react: 1, agcFloorMul: 1, agcDecay: 0.995, snap: 0.3, pulse: 1, dens: 1, hue: 0, sat: 1, chroma: 0.8, style: 0, spin: 0.3, autorot: true, inkFlow: 1, inkFlowAuto: false, inkColor: 1, inkCrisp: 0.5,
   low: [0.039, 0.165, 0.40], mid: [0.15, 0.65, 1.0], high: [0.498, 0.878, 1.0], core: [0.74, 0.94, 1.0], base: [1.0, 0.48, 0.12],
   bassCol: [1.0, 0.18, 0.18], midCol: [0.215, 1.0, 0.368], trebCol: [0.227, 0.627, 1.0], tint: 0,
   bgTop: [0.031, 0.051, 0.086], bgBot: [0.016, 0.020, 0.035]
@@ -126,6 +126,7 @@ export function initControls() {
     $('speed').style.opacity = ui.autospeed ? 0.45 : 1;   // dim slider when beat-driven
     if (!ui.autospeed) $('speedV').textContent = (+$('speed').value).toFixed(1);
   };
+  $('autospeed').onchange();   // apply the default (checked) state on fresh loads
   $('autorot').onchange = () => ui.autorot = $('autorot').checked;
   $('sysaudio').onchange = async () => {
     const on = $('sysaudio').checked;

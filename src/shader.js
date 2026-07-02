@@ -50,6 +50,8 @@ float fractalField(vec3 p, out float cc){
   p.xy = r2(uTime*0.06) * p.xy;
   float strength = 6.5 + 2.5*uReact*(uBass + uBeat*0.7);
   vec3 offs = vec3(-0.5, -0.78 + 0.14*sin(uTime*0.35), -1.1);
+  // bass/treble morph the fold offset — the kaliset's shape parameter — so the foam reshapes with the music
+  offs += vec3(0.025*uTreble, -0.04*uBass, 0.0);
   float accum = 0.0, prev = 0.0, tw = 0.0, cacc = 0.0, trap = 1e9;
   for(int i=0;i<16;i++){
     float mag = dot(p,p);
@@ -83,7 +85,7 @@ vec2 worley(vec3 p, out vec3 cell){
   for(int z=-1;z<=1;z++){
     vec3 g = vec3(float(x),float(y),float(z));
     vec3 o = hash33(ip+g);
-    o = 0.5 + 0.5*sin(uTime*0.7 + 6.2831853*o);   // animate the gem centres
+    o = 0.5 + (0.2 + 0.5*uMid)*sin(uTime*0.7 + 6.2831853*o);   // gem centres dance harder with the mids, settle in silence
     vec3 d = g + o - fp;
     float dd = dot(d,d);
     if(dd<f1){ f2=f1; f1=dd; cell=ip+g; } else if(dd<f2){ f2=dd; }
@@ -107,7 +109,7 @@ float galaxyField(vec3 p, out float starOut, out float cc){
   float a = atan(p.z, p.x);
   cc = fract(a*0.15915 + r*0.55 + uTime*0.02);        // hue winds around the disk + out along the arms
   float spiral = pow(0.5 + 0.5*cos(2.0*a + r*7.0 - uTime*0.9), 2.0); // two arms winding out
-  float disk = exp(-abs(p.y)*5.0) * exp(-r*1.3);                     // dense near the plane
+  float disk = exp(-abs(p.y)*(5.0 - uBass*2.2)) * exp(-r*1.3);       // dense near the plane; puffs thicker on bass
   float arms = disk * spiral;
   float core = exp(-r*4.5) * exp(-abs(p.y)*7.0) * (1.2 + uBass*2.5 + uBeat*2.0); // throbs on bass
   // twinkling stars: one jittered point per grid cell
@@ -124,12 +126,12 @@ float galaxyField(vec3 p, out float starOut, out float cc){
 // singularity: accretion disk spiralling into a blazing core, with a dark event horizon
 float singularityField(vec3 p, out float cc){
   float r = length(p.xz);
-  float swirl = uTime*0.5 + 1.5/(r+0.22);          // inner matter whips around faster (gravity)
+  float swirl = uTime*0.5 + uMid*0.5 + 1.5/(r+0.22);   // inner matter whips around faster (gravity); mids nudge the whole disk round
   p.xz = r2(swirl) * p.xz;
   float a = atan(p.z, p.x);
   cc = fract((a*2.0 + r*9.0 - uTime*1.2)*0.15915);  // hue follows the spiralling arms into the core
   float disk = exp(-abs(p.y)*(7.0 + 6.0*exp(-r*2.0))) * smoothstep(1.3, 0.12, r);  // thin disk on the plane
-  float arms = pow(0.5 + 0.5*cos(a*2.0 + r*9.0 - uTime*1.2), 2.0);                  // two arms winding in
+  float arms = pow(0.5 + 0.5*cos(a*2.0 + r*9.0 - uTime*1.2), 2.0 + uTreble*2.0);    // two arms winding in; treble thins them crisp
   disk *= 0.35 + 0.65*arms;
   float core = exp(-r*5.5) * exp(-abs(p.y)*8.0) * (1.6 + uBass*3.0 + uBeat*3.0);    // throbs on bass/beat
   float shock = max(sin(r*16.0 - uPulseT*5.0), 0.0) * exp(-r*1.6) * uBeat * 1.4;    // beat shockwave rings
@@ -140,12 +142,13 @@ float singularityField(vec3 p, out float cc){
 // wormhole: a ribbed tunnel funnelling to a bright vanishing point, rushing past the viewer
 float wormholeField(vec3 p, out float cc){
   float dd = smoothstep(1.0, -1.0, p.z);            // 0 at the near mouth → 1 at the far end
-  p.xy = r2(p.z*0.8 + uTime*0.2) * p.xy;            // gentle twist down the throat
+  p.xy = r2(p.z*0.8 + uTime*0.2 + uMid*0.5) * p.xy; // gentle twist down the throat; mids wring it harder
   float r = length(p.xy);
   cc = fract(p.z*0.6 - uTime*0.25 + atan(p.y,p.x)*0.15915);  // colour rings rushing down the throat
-  float radius = 0.85 - 0.6*dd;                     // funnels narrower toward the far end
+  float radius = 0.85 - 0.6*dd - 0.10*uBass;        // funnels narrower toward the far end; throat pinches on bass (breathes)
   float wall = exp(-pow((r - radius)*6.0, 2.0));    // glowing tube wall
   float ribs = 0.5 + 0.5*sin(p.z*11.0 - uTime*5.0 + atan(p.y,p.x)*3.0);  // ribs rushing toward the viewer
+  ribs = pow(ribs, 1.0 + uTreble*1.5);              // treble sharpens the rib contrast
   wall *= 0.35 + 0.65*ribs;
   float core = exp(-r*4.5) * dd * (1.2 + uBass*2.0);   // bright vanishing point, throbs on bass
   return wall*1.6 + core*2.2;
@@ -163,12 +166,12 @@ float inkField(vec3 p){
     fbm(p*1.3 + flow*0.7 + vec3(3.1)),
     fbm(p*1.3 + flow*0.7 + vec3(5.7)));
   // a few descending streamers: ink gathered around vertical columns that snake in x,z with height
-  float crisp = 4.5 + (uInkCrisp - 0.5)*7.0;             // tighter columns = crisper streamers (0.5 = default look)
+  float crisp = max(4.5 + (uInkCrisp - 0.5)*7.0 - uBass*2.0, 0.8);   // tighter columns = crisper streamers (0.5 = default look); bass billows them fatter
   float ink = 0.0;
   for(int i=0;i<3;i++){
     float fi = float(i);
-    float cx = 0.45*sin(fi*2.1 + q.y*1.4 + t*0.25);
-    float cz = 0.45*cos(fi*1.7 + q.y*1.2 + t*0.20);
+    float cx = (0.45 + uMid*0.2)*sin(fi*2.1 + q.y*1.4 + t*0.25);   // mids swing the streamers wider
+    float cz = (0.45 + uMid*0.2)*cos(fi*1.7 + q.y*1.2 + t*0.20);
     float dist = length(vec2(q.x - cx, q.z - cz));
     ink += exp(-dist*dist*crisp);
   }
@@ -321,16 +324,19 @@ void main(){
       float d;
       vec3 starEmis = vec3(0.0);
       float fracCC = 0.0, liqCC = 0.0, geomCC = 0.0;
+      // beat ripple: each beat displaces every field's sample domain as a radial wave
+      // travelling outward (rides the pulse phase) — beats move the volume, not just brighten it
+      vec3 qb = q + 0.10*uReact*uBeat * sin(rq*9.0 - uPulseT*4.0) * q/max(rq, 0.15);
       if(uMode==1){
         // ---- FRACTAL: kaliset sphere-folding field; coloured by fold geometry for multicolour foam ----
-        d = fractalField(q, fracCC) * uDensity * reactBoost;
+        d = fractalField(qb, fracCC) * uDensity * reactBoost;
       } else if(uMode==2){
         // ---- CRYSTAL: faceted Voronoi lattice, glowing gem cells ----
-        d = crystalField(q, geomCC) * uDensity * reactBoost;
+        d = crystalField(qb, geomCC) * uDensity * reactBoost;
       } else if(uMode==3){
         // ---- COSMOS: spiral galaxy; stars are sharp emissive points colored by the loudest band ----
         float starI;
-        d = galaxyField(q, starI, geomCC) * uDensity * reactBoost;
+        d = galaxyField(qb, starI, geomCC) * uDensity * reactBoost;
         float bsum = uBass + uMid + uTreble;
         // power-weight so the dominant band wins the hue (linear average muddies to grey)
         float wb = uBass*uBass, wm = uMid*uMid, wt = uTreble*uTreble;
@@ -339,24 +345,27 @@ void main(){
         starEmis = starCol * starI * (10.0 + uTreble*8.0);
       } else if(uMode==5){
         // ---- SINGULARITY: accretion disk spiralling into a dark core ----
-        d = singularityField(q, geomCC) * uDensity * reactBoost;
+        d = singularityField(qb, geomCC) * uDensity * reactBoost;
       } else if(uMode==6){
         // ---- WORMHOLE: ribbed tunnel funnelling to a vanishing point ----
-        d = wormholeField(q, geomCC) * uDensity * reactBoost;
+        d = wormholeField(qb, geomCC) * uDensity * reactBoost;
       } else if(uMode==7){
         // ---- INK: dye puffs blooming and feathering into the liquid ----
-        d = inkField(q) * uDensity * reactBoost;
+        d = inkField(qb) * uDensity * reactBoost;
       } else {
         // ---- LIQUID: domain-warped fbm fluid with ridged veins ----
-        vec3 sp = q*2.3;
+        vec3 sp = qb*2.3;
         vec3 warp = vec3(
           fbm(sp + vec3(0.0,  uTime*0.25, 0.0)),
           fbm(sp + vec3(5.2, -uTime*0.20, 1.3)),
           fbm(sp + vec3(1.7,  3.1, uTime*0.22)));
-        float base = fbm(sp + warp*1.8*reactBoost + vec3(0.0,-uTime*0.15,0.0));
-        d = pow(smoothstep(0.40,0.88,base), 1.7);
+        // mids stir the turbulence: more mid energy = stronger domain warp = busier, curlier fluid
+        float base = fbm(sp + warp*(1.2 + uReact*uMid*1.1)*reactBoost + vec3(0.0,-uTime*0.15,0.0));
+        // bass swells the liquid itself: threshold shift = shape change, which survives the tone map
+        d = pow(smoothstep(0.40 - 0.18*uReact*uBass, 0.88, base), 1.7);
         float veins = 1.0 - abs(2.0*fbm(sp*1.6 + warp + uTime*0.12) - 1.0);
-        d += pow(veins, 5.0) * 0.7;
+        // treble sharpens and brightens the veins (timbre changes the texture)
+        d += pow(veins, 5.0 - uTreble*2.5) * (0.35 + uReact*uTreble*0.7);
         d *= uDensity * reactBoost;
         d += uReact*uTreble*0.4*pow(smoothstep(0.62,0.92,warp.x),4.0);
         // colour coord from the flow geometry (domain warp + ridged veins) -> multicolour, like fractal's fold trap
@@ -366,6 +375,8 @@ void main(){
       float rr = rq;
       if(uShape!=2) d *= smoothstep(1.5, 0.45, rr);   // others keep the mass centred
       else d *= 1.35;                                  // no container: compensate for the spread so the open field stays vivid
+      // overall loudness -> exposure: uLevel is the one un-AGC'd signal, so quiet passages visibly calm the field
+      d *= 0.55 + uLevel*1.5;
       // radial pulse: brightness rings travel from the centre to the sides on the beat
       float ring = 0.5 + 0.5*sin(rr*9.0 - uPulseT*4.0);
       d *= 1.0 + uPulse*(0.30 + uBass*1.1 + uBeat*1.7)*ring;

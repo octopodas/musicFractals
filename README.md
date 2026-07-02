@@ -6,10 +6,13 @@ One WebGL fragment shader does the rendering — no dependencies, no build step.
 
 ![modes: 7](https://img.shields.io/badge/modes-7-4cc5ff) ![deps: none](https://img.shields.io/badge/deps-none-success)
 
-Everything reacts to the track in real time: bass + beat detection pump density and
-brightness (rhythm), the dominant musical pitch rotates the palette's hue while spectral
-brightness shifts its temperature (pitch → colour), and mids drive the spin and fold
-rotation. Per-band auto-gain keeps naturally-quiet bands (treble) swinging full-scale.
+Everything reacts to the track in real time: spectral-flux onset detection turns every
+transient (kick, snare, hat, note attack) into a beat that ripples through the volume,
+bass swells the field's shape, mids stir the turbulence and drive the spin, treble
+sharpens the detail, the dominant musical pitch rotates the palette's hue while spectral
+brightness shifts its temperature (pitch → colour), and overall loudness sets the
+exposure so quiet passages visibly calm down. Per-band auto-gain keeps naturally-quiet
+bands (treble) swinging full-scale.
 
 ## Visualizations
 

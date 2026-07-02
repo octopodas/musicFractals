@@ -15,7 +15,7 @@ let actx, analyser, freq, srcNode;
 // per-band rolling peaks for auto-gain; floors double as init and gate silence
 const agcFloor = { bass: 0.35, mid: 0.20, treble: 0.10 };
 const peak = { bass: 0.35, mid: 0.20, treble: 0.10 };
-let bassAvg = 0;
+let prevFreq, fluxAvg = 0;        // previous FFT frame + running flux mean for onset detection
 let chromaVX = 0, chromaVY = 0;   // smoothed chroma vector (circular smoothing of hue+strength)
 
 export const getFreq = () => freq;   // raw FFT bins for the spectrum bars (undefined until initAudio)
@@ -52,9 +52,18 @@ export function analyze(ui) {
   analysis.mid = sm(analysis.mid, agc('mid', avg(160, 1800)));
   analysis.treble = sm(analysis.treble, agc('treble', avg(1800, 9000)));
   analysis.level = sm(analysis.level, avg(20, 12000));
-  // beat detection on bass energy
-  bassAvg = bassAvg * 0.92 + analysis.bass * 0.08;
-  if (analysis.bass > bassAvg * 1.35 && analysis.bass > 0.25) analysis.beat = 1.0;
+  // beat detection by spectral flux: sum of positive FFT deltas since the last frame.
+  // Deltas survive the analyser smoothing that flattens level-ratio tests, and fire on
+  // any transient (kick, snare, hat, note onset), not just bass.
+  if (!prevFreq) prevFreq = new Uint8Array(bins);
+  const lo = idx(60), hi = idx(9000);
+  let flux = 0;
+  for (let i = lo; i <= hi; i++) { const df = freq[i] - prevFreq[i]; if (df > 0) flux += df; }
+  prevFreq.set(freq);
+  flux /= 255 * (hi - lo + 1);
+  // ponytail: per-frame flux is frame-rate dependent; normalize by dt if high-refresh displays under-trigger
+  if (flux > fluxAvg * 1.6 && flux > 0.01) analysis.beat = 1.0;
+  fluxAvg = fluxAvg * 0.95 + flux * 0.05;
   analysis.beat *= 0.90 - ui.snap * 0.40;
   // spectral-centroid -> auto hue (pitch reactive)
   let num = 0, den = 0;
