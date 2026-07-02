@@ -144,14 +144,22 @@ float wormholeField(vec3 p, out float cc){
   float dd = smoothstep(1.0, -1.0, p.z);            // 0 at the near mouth → 1 at the far end
   p.xy = r2(p.z*0.8 + uTime*0.2 + uMid*0.5) * p.xy; // gentle twist down the throat; mids wring it harder
   float r = length(p.xy);
-  cc = fract(p.z*0.6 - uTime*0.25 + atan(p.y,p.x)*0.15915);  // colour rings rushing down the throat
+  float ang = atan(p.y, p.x);
+  cc = fract(p.z*0.6 - uTime*0.25 + ang*0.15915);   // colour rings rushing down the throat
   float radius = 0.85 - 0.6*dd - 0.10*uBass;        // funnels narrower toward the far end; throat pinches on bass (breathes)
-  float wall = exp(-pow((r - radius)*6.0, 2.0));    // glowing tube wall
-  float ribs = 0.5 + 0.5*sin(p.z*11.0 - uTime*5.0 + atan(p.y,p.x)*3.0);  // ribs rushing toward the viewer
+  float wall = exp(-pow((r - radius)*10.0, 2.0));   // glowing tube wall (tight = reads as a tube, not a wash)
+  float ribs = 0.5 + 0.5*sin(p.z*11.0 - uTime*5.0 + ang*3.0);  // ribs rushing toward the viewer
   ribs = pow(ribs, 1.0 + uTreble*1.5);              // treble sharpens the rib contrast
   wall *= 0.35 + 0.65*ribs;
-  float core = exp(-r*4.5) * dd * (1.2 + uBass*2.0);   // bright vanishing point, throbs on bass
-  return wall*1.6 + core*2.2;
+  // warp streaks: glowing motes stretched along the tube, rushing at the viewer (the classic warp-tunnel feel)
+  vec3 sc = vec3(ang*1.2732, r*2.5, p.z*0.9 - uTime*1.4);   // cells: 8 around × radial shells × scrolling toward the mouth
+  vec3 fc = fract(sc) - 0.5;
+  vec3 h = hash33(floor(sc));
+  fc.xy -= (h.xy - 0.5)*0.3;   // small jitter — keeps each mote's gaussian inside its cell (bigger clips at the walls)
+  float streak = exp(-dot(fc.xy,fc.xy)*18.0) * max(1.0 - 2.0*abs(fc.z), 0.0) * (0.4 + 0.6*h.z);
+  streak *= smoothstep(radius, radius*0.7, r);              // keep them inside the throat
+  float core = exp(-r*6.0) * dd * (1.4 + uBass*2.4);   // bright vanishing point, throbs on bass
+  return wall*2.0 + core*2.6 + streak*(0.9 + uTreble*1.2 + uBeat*1.8);
 }
 
 // ink in liquid: ink poured in at the top, flowing endlessly downward in braided streamers that
@@ -309,10 +317,11 @@ void main(){
       marchDir = refract(rd, nrm, 0.72);
       if(length(marchDir) < 0.001) marchDir = reflect(rd,nrm);
     }
-    vec3 q = entry + marchDir*0.02;
-
     const int STEPS = 64;
     float dt = (uShape==2) ? 0.045 : 0.032;   // slightly longer reach to span the open slab
+    // per-pixel ray-start jitter: breaks march quantization bands into animated grain (all modes)
+    float dith = hash(vec3(gl_FragCoord.xy, fract(uTime)));
+    vec3 q = entry + marchDir*(0.02 + dt*dith);
     vec3 acc = vec3(0.0);
     float trans = 1.0;
     float reactBoost = 1.0 + uReact*(uBass*1.6 + uBeat*1.2);
@@ -373,7 +382,7 @@ void main(){
       }
       // soft radial falloff so the mass floats inside the container
       float rr = rq;
-      if(uShape!=2) d *= smoothstep(1.5, 0.45, rr);   // others keep the mass centred
+      if(uShape!=2) d *= smoothstep(uMode==6 ? 2.2 : 1.5, 0.45, rr);   // keep the mass centred (wormhole: gentler, so its mouth + far core keep presence)
       else d *= 1.35;                                  // no container: compensate for the spread so the open field stays vivid
       // overall loudness -> exposure: uLevel is the one un-AGC'd signal, so quiet passages visibly calm the field
       d *= 0.55 + uLevel*1.5;
