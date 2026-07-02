@@ -18,6 +18,7 @@ uniform vec3  uColLow, uColMid, uColHigh, uColCore, uColBase;
 uniform vec3  uBassCol, uMidCol, uTrebleCol;   // audio tint-wash colors
 uniform float uTintAmt;                         // 0 = off
 uniform vec3  uBgTop, uBgBot;                   // backdrop gradient (top, bottom)
+uniform float uBands[16];                       // 16-band live spectrum (Equalizer mode)
 uniform int   uStyle, uMode, uShape;
 
 // ---- hash / value noise ----
@@ -189,6 +190,109 @@ float inkField(vec3 p){
   return ink * 2.4;
 }
 
+// ---------- lit-geometry modes (8–11): solid SDFs, sphere-traced + shaded in the surface rail ----------
+float sdBox(vec3 p, vec3 b){ vec3 q = abs(p) - b; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); }
+
+// 8 MONOLITH: Menger-carved block; bass slides the carve phase so rooms open/close, mids tumble it
+float monolithSDF(vec3 p, out float cc){
+  p.xz = r2(uTime*0.07 + uMid*0.5) * p.xz;
+  p.xy = r2(uTime*0.045) * p.xy;
+  float d = sdBox(p, vec3(0.72));
+  float s = 1.0, trap = 1e9;
+  float shift = uReact*uBass*0.35;
+  for(int m=0;m<4;m++){
+    vec3 a = mod(p*s + shift*float(m+1)*0.37, 2.0) - 1.0;
+    s *= 3.0;
+    vec3 rr = abs(1.0 - 3.0*abs(a));
+    float c = (min(max(rr.x,rr.y), min(max(rr.y,rr.z), max(rr.z,rr.x))) - 1.0)/s;
+    d = max(d, c);
+    trap = min(trap, dot(a,a));
+  }
+  cc = fract(log2(trap + 1.0)*0.8);   // carve depth -> hue coordinate
+  return d;
+}
+
+// 9 GYROID: minimal-surface lattice; bass thickens the walls, mids undulate it, treble shimmers the surface
+float gyroidSDF(vec3 p, out float cc){
+  p.xz = r2(uTime*0.06) * p.xz;
+  vec3 q = p*4.5;
+  q += uMid*0.55*vec3(sin(p.y*2.0 + uTime*0.7), sin(p.z*2.0 + uTime*0.6), sin(p.x*2.0 + uTime*0.8));
+  float g = dot(sin(q), cos(q.yzx));
+  float d = (abs(g) - (0.25 + uBass*0.45))/4.5*0.7;   // shell around the zero surface; bass swells the walls
+  d -= uTreble*0.010*dot(sin(q*2.7), cos(q.zxy*2.7)); // treble: fine shimmer ripple on the surface
+  cc = fract(0.22*g + 0.30*p.y + 0.5);
+  return d;
+}
+
+// 10 EQUALIZER: 16 solid columns around a ring — heights ARE the live spectrum; beats send a wave round it.
+// Checks the ray's sector AND both neighbours: single-sector distances overestimate near the boundary
+// (the true nearest column is the neighbour's) and the sphere tracer erodes the column flanks.
+float equalizerSDF(vec3 p, out float cc){
+  p.xz = r2(uTime*0.05) * p.xz;                       // slow carousel
+  float ang = atan(p.z, p.x) + 3.14159265;            // 0..2π
+  float sector = 0.3926991;                           // 2π/16
+  float r = length(p.xz);
+  float best = max(abs(p.y + 0.88) - 0.03, r - 0.80); // base disc the ring stands on
+  cc = 0.0;
+  for(int o=-1;o<=1;o++){
+    float fio = floor(ang/sector) + float(o);
+    int i = int(mod(fio, 16.0));
+    float band = 0.0;
+    for(int k=0;k<16;k++) if(k==i) band = uBands[k];  // fragment shaders require constant-index uniform access
+    float h = 0.08 + band*band*1.25;                  // squared: stretches height contrast between bands
+    float a0 = (fio + 0.5)*sector;                    // column-centre angle: wave quantized per column keeps tops flat
+    h *= 1.0 + 0.15*uReact*uBeat*(0.5 + 0.5*sin(a0*2.0 - uPulseT*4.0));  // beat wave around the ring
+    float a = ang - a0;                               // signed angle from this column's centre (no mod jump)
+    vec2 c = vec2(cos(a), sin(a))*r;                  // column-local frame: x radial, y tangential
+    float d = sdBox(vec3(c.x - 0.58, p.y + 0.82 - 0.5*h, c.y), vec3(0.068, 0.5*h, 0.068)) - 0.02;
+    if(d < best){ best = d; cc = (mod(fio, 16.0) + 0.5)/16.0; }   // hue = position around the ring
+  }
+  return best;
+}
+
+// 11 SHARDS: kaleidoscopic mirror-folded crystal; bass separates the shards, beats re-fold the chamber
+float shardsSDF(vec3 p, out float cc){
+  p.xz = r2(uTime*0.09 + uMid*0.5) * p.xz;
+  p.xy = r2(uTime*0.06) * p.xy;
+  vec3 n1 = normalize(vec3(1.0, 0.618, 0.0));         // golden-ratio fold planes
+  vec3 n2 = normalize(vec3(0.0, 1.0, 0.618));
+  vec3 n3 = normalize(vec3(0.618, 0.0, 1.0));
+  float sep = 0.16 + uReact*uBass*0.14;               // bass pushes the shards apart
+  float tw = 0.35 + uReact*uBeat*0.30;                // beat kicks the twist → chamber re-assembles
+  float trap = 0.0;
+  for(int i=0;i<5;i++){
+    p = abs(p);
+    p -= 2.0*min(dot(p, n1), 0.0)*n1;
+    p -= 2.0*min(dot(p, n2), 0.0)*n2;
+    p -= 2.0*min(dot(p, n3), 0.0)*n3;
+    p.xy = r2(tw) * p.xy;
+    p -= vec3(sep, sep*0.7, sep*0.45);
+    trap += length(p);
+  }
+  cc = fract(trap*0.30);
+  return sdBox(p, vec3(0.17, 0.28, 0.13)) - 0.015;
+}
+
+// mode dispatch, with the beat-ripple warp baked in so tracing, normals and AO all see the same field
+float sceneSDF(vec3 p, out float cc){
+  float rs = length(p);
+  p += 0.06*uReact*uBeat * sin(rs*9.0 - uPulseT*4.0) * p/max(rs, 0.15);
+  float d;
+  if(uMode==8) d = monolithSDF(p, cc);
+  else if(uMode==9) d = gyroidSDF(p, cc);
+  else if(uMode==10) d = equalizerSDF(p, cc);
+  else d = shardsSDF(p, cc);
+  // the ripple warp adds up to ~0.54*react*beat of gradient, breaking the distance bound the
+  // sphere tracer relies on — rescale so beats warp the geometry without eroding its surface
+  return d / (1.0 + 0.55*uReact*uBeat);
+}
+vec3 calcN(vec3 p){
+  float dm;
+  vec2 e = vec2(1.0, -1.0)*0.0035;
+  return normalize(e.xyy*sceneSDF(p + e.xyy, dm) + e.yyx*sceneSDF(p + e.yyx, dm)
+                 + e.yxy*sceneSDF(p + e.yxy, dm) + e.xxx*sceneSDF(p + e.xxx, dm));
+}
+
 mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
 mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1,0,0, 0,c,-s, 0,s,c); }
 
@@ -326,6 +430,50 @@ void main(){
     float trans = 1.0;
     float reactBoost = 1.0 + uReact*(uBass*1.6 + uBeat*1.2);
 
+    if(uMode>=8){
+      // ---- lit-geometry rail: sphere-trace the mode's SDF, shade the hit as a solid ----
+      float tMax = (uShape==2) ? 3.3 : (t.y - t.x);
+      float tt = 0.02 + dt*dith*0.5, gc = 0.0;
+      float hit = -1.0;
+      for(int i=0;i<96;i++){
+        vec3 sp = entry + marchDir*tt;
+        if(uShape==0 ? (abs(sp.x)>1.02||abs(sp.y)>1.02||abs(sp.z)>1.02) : (uShape==1 && length(sp)>1.02)) break;
+        float d = sceneSDF(sp, gc);
+        if(d < 0.0025){ hit = tt; break; }
+        tt += d*0.7;                        // conservative step: folded/warped SDFs under-estimate
+        if(tt > tMax) break;
+      }
+      if(hit > 0.0){
+        vec3 pos = entry + marchDir*hit;
+        vec3 n = calcN(pos);
+        float dum, ao = 0.0;
+        for(int i=1;i<=4;i++){ float ds = 0.05*float(i); ao += clamp(sceneSDF(pos + n*ds, dum)/ds, 0.0, 1.0); }
+        ao *= 0.25;
+        // two lights over a palette-tinted body, so Palette / Custom colours still matter;
+        // body hue spun by the mode's own coordinate so convex shapes (equalizer columns) stay colourful
+        vec3 body = fluidColor(0.30, pos.y)*0.38;
+        body = mix(body, hueShift(body, 6.2831853*gc), 0.65);
+        vec3 L1 = normalize(vec3(0.5, 0.8, 0.4));    // cool key
+        vec3 L2 = normalize(vec3(-0.6, -0.25, -0.7));// warm rim
+        float dif = max(dot(n, L1), 0.0);
+        float bak = max(dot(n, L2), 0.0);
+        float spe = pow(max(dot(n, normalize(L1 - marchDir)), 0.0), 48.0);
+        vec3 lit = body*(0.18 + 0.95*dif)*vec3(0.80,0.90,1.05) + body*bak*vec3(1.0,0.62,0.38)*0.55;
+        lit *= mix(0.30, 1.0, ao);                              // AO carries the depth cue
+        lit += vec3(0.9,0.95,1.0)*spe*(0.35 + uTreble*0.8)*ao;  // treble glints the highlights
+        // neon accents: cavities glow in the palette colour, hue spun by the mode's own coordinate,
+        // collapsing toward the pitch hue under confident harmony (same recipe as the fog modes)
+        vec3 e = fluidColor(0.55 + 0.35*gc, pos.y);
+        vec3 eBase = e;
+        e = hueShift(e, 6.2831853*gc);
+        e = mix(e, eBase, 0.85*clamp(uChromaStr*uChromaAmt, 0.0, 1.0));
+        float cav = 1.0 - ao;
+        float rim2 = pow(1.0 - max(dot(n, -marchDir), 0.0), 3.0);   // silhouette edges glow neon
+        acc = lit + e * (cav*cav*1.5 + rim2*0.9)*uDensity*(0.55 + uLevel*1.5)*(1.0 + uReact*uBeat*0.9);
+        trans = 0.0;                                            // opaque hit hides the background
+      }
+    }
+    else
     for(int i=0;i<STEPS;i++){
       if(trans < 0.02) break;
       float rq = length(q);
@@ -410,9 +558,11 @@ void main(){
       q += marchDir*dt;
     }
 
-    // beat flash from the core
-    acc *= 1.0 + uBeat*0.6*uReact;
-    acc += vec3(0.3,0.6,1.0)*uBeat*uReact*0.15;
+    // beat flash from the core (fog modes only — surface modes flash their emissive accents instead)
+    if(uMode<8){
+      acc *= 1.0 + uBeat*0.6*uReact;
+      acc += vec3(0.3,0.6,1.0)*uBeat*uReact*0.15;
+    }
 
     vec3 inside = acc;
     if(uShape>=1){

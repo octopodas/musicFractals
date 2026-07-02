@@ -46,7 +46,8 @@ function buildGL() {
     inkFlow: U('uInkFlow'), inkColor: U('uInkColor'), inkCrisp: U('uInkCrisp'),
     colLow: U('uColLow'), colMid: U('uColMid'), colHigh: U('uColHigh'), colCore: U('uColCore'), colBase: U('uColBase'),
     bassCol: U('uBassCol'), midCol: U('uMidCol'), trebleCol: U('uTrebleCol'), tintAmt: U('uTintAmt'),
-    bgTop: U('uBgTop'), bgBot: U('uBgBot')
+    bgTop: U('uBgTop'), bgBot: U('uBgBot'),
+    bands: U('uBands[0]')
   };
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
@@ -120,5 +121,6 @@ export function draw({ ui, analysis, rot, time, pulseT, inkFlow }) {
   gl.uniform1f(u.tintAmt, ui.tint);
   gl.uniform3fv(u.bgTop, ui.bgTop);
   gl.uniform3fv(u.bgBot, ui.bgBot);
+  gl.uniform1fv(u.bands, analysis.bands);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }

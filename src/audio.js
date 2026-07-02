@@ -9,13 +9,14 @@ export const audioEl = $('audio');
 // Live analysis read by the renderer + main loop each frame (mutated in place).
 // centroid 0..1 = spectral brightness (low→high); chromaHue/chromaStr = dominant
 // pitch class as hue + how tonal (vs atonal/percussive) it is.
-export const analysis = { bass: 0, mid: 0, treble: 0, level: 0, beat: 0, hueAuto: 0, centroid: 0, chromaHue: 0, chromaStr: 0 };
+export const analysis = { bass: 0, mid: 0, treble: 0, level: 0, beat: 0, hueAuto: 0, centroid: 0, chromaHue: 0, chromaStr: 0, bands: new Float32Array(16) };
 
 let actx, analyser, freq, srcNode;
 // per-band rolling peaks for auto-gain; floors double as init and gate silence
 const agcFloor = { bass: 0.35, mid: 0.20, treble: 0.10 };
 const peak = { bass: 0.35, mid: 0.20, treble: 0.10 };
 let prevFreq, fluxAvg = 0;        // previous FFT frame + running flux mean for onset detection
+let bandsPeak = 0.1;              // ONE shared rolling peak for the 16-band spectrum (keeps spectral shape)
 let chromaVX = 0, chromaVY = 0;   // smoothed chroma vector (circular smoothing of hue+strength)
 
 export const getFreq = () => freq;   // raw FFT bins for the spectrum bars (undefined until initAudio)
@@ -52,6 +53,21 @@ export function analyze(ui) {
   analysis.mid = sm(analysis.mid, agc('mid', avg(160, 1800)));
   analysis.treble = sm(analysis.treble, agc('treble', avg(1800, 9000)));
   analysis.level = sm(analysis.level, avg(20, 12000));
+  // 16-band log-spaced spectrum (60Hz–10kHz) for the Equalizer mode. Normalized by ONE shared
+  // rolling peak, not per-band — per-band AGC flattens every active band to ~1.0 and the columns
+  // all read the same height; a shared peak preserves the spectrum's real shape.
+  let bandsMax = 0;
+  const raws = new Array(16);
+  for (let b = 0; b < 16; b++) {
+    const f0 = 60 * Math.pow(166.7, b / 16), f1 = 60 * Math.pow(166.7, (b + 1) / 16);
+    raws[b] = avg(f0, f1);
+    if (raws[b] > bandsMax) bandsMax = raws[b];
+  }
+  bandsPeak = Math.max(bandsMax, bandsPeak * ui.agcDecay, 0.10);
+  for (let b = 0; b < 16; b++) {
+    const t = Math.min(1, raws[b] / bandsPeak);
+    analysis.bands[b] = t > analysis.bands[b] ? t : analysis.bands[b] * dec + t * (1 - dec);
+  }
   // beat detection by spectral flux: sum of positive FFT deltas since the last frame.
   // Deltas survive the analyser smoothing that flattens level-ratio tests, and fire on
   // any transient (kick, snare, hat, note onset), not just bass.

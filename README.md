@@ -4,7 +4,7 @@ An audio-reactive volumetric visualizer that ray-marches a glowing volume inside
 semi-transparent glass cube — or an invisible sphere, or no container at all (fullscreen).
 One WebGL fragment shader does the rendering — no dependencies, no build step.
 
-![modes: 7](https://img.shields.io/badge/modes-7-4cc5ff) ![deps: none](https://img.shields.io/badge/deps-none-success)
+![modes: 11](https://img.shields.io/badge/modes-11-4cc5ff) ![deps: none](https://img.shields.io/badge/deps-none-success)
 
 Everything reacts to the track in real time: spectral-flux onset detection turns every
 transient (kick, snare, hat, note attack) into a beat that ripples through the volume,
@@ -16,7 +16,7 @@ bands (treble) swinging full-scale.
 
 ## Visualizations
 
-Seven **modes** — the shape of the volume:
+Eleven **modes** — the shape of the volume:
 
 - **Liquid** — domain-warped fluid with cyan veins and a molten base.
 - **Fractal** — a Kali / Star-Nest sphere-folding field; intricate foam that folds and tumbles, coloured by its fold geometry so it reads as rich multicolour.
@@ -25,6 +25,14 @@ Seven **modes** — the shape of the volume:
 - **Singularity** — an accretion disk spiralling into a dark event horizon.
 - **Wormhole** — a ribbed tunnel funnelling to a bright vanishing point.
 - **Ink in liquid** — dye streamers flowing endlessly downward, sweeping through colours as they fall.
+
+The last four are **lit solid geometry** — real normals, specular and ambient occlusion with neon
+palette accents — where the others are emissive volumetrics:
+
+- **Monolith** — Menger-carved architecture; bass slides the carve so rooms open and close.
+- **Gyroid** — a minimal-surface lattice; bass thickens its walls, mids set it undulating.
+- **Equalizer** — a radial ring of solid columns whose heights are the live 16-band spectrum.
+- **Shards** — a kaleidoscopic crystal chamber that re-folds itself on every beat.
 
 Three **containers** (Cube glass / Sphere invisible / None — fullscreen) and six **palettes**
 (Liquid Cyan · Plasma · Nebula · Inferno · Aurora · Custom).
