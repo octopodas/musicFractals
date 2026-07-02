@@ -26,11 +26,20 @@ for (let i = 0; i < NB; i++) levelsEl.appendChild(document.createElement('i'));
 const bars = [...levelsEl.children];
 
 // ---------- main loop ----------
-let fluidTime = 0, pulseT = 0, beatSpeed = 1, prev = performance.now();
+let fluidTime = 0, pulseT = 0, beatSpeed = 1, autoModeT = 0, prev = performance.now();
 function frame(now) {
   if (contextLost()) { requestAnimationFrame(frame); return; } // skip while GPU recovers; rAF chain stays alive
   const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
   analyze(ui);
+
+  // auto-cycle: advance to the next mode every N seconds (through the select, so the UI stays in sync)
+  autoModeT = ui.autoMode ? autoModeT + dt : 0;
+  if (ui.autoMode && autoModeT >= ui.autoModeInt) {
+    autoModeT = 0;
+    const sel = $('mode'), opts = [...sel.options];
+    sel.value = opts[(opts.findIndex(o => o.value === sel.value) + 1) % opts.length].value;
+    sel.dispatchEvent(new Event('change'));
+  }
 
   // auto-speed: lurches hard on each beat, coasts back toward baseline between (slider scales it)
   const beatTarget = 0.25 + analysis.beat * 4.0 + analysis.bass * 0.4;

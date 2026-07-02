@@ -62,6 +62,7 @@ A generated `tracks/test-tone.wav` is included as a demo. Your own music stays l
 | | |
 |---|---|
 | **Mode / Container / Palette** | volume shape; glass cube, invisible sphere, or fullscreen; colour ramp |
+| **Auto-cycle modes** | switch to the next mode automatically every N seconds (1s steps) |
 | **Speed / Sync speed to beat** | animation speed; optionally let the beat drive the tempo |
 | **Reactivity / Density / Pulse** | audio sensitivity, fill, beat-driven brightness rings |
 | **AGC floor / AGC adapt / Snap** | per-band auto-gain sensitivity + adaptation, and smoothing tightness |
