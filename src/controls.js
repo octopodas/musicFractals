@@ -28,7 +28,7 @@ const SLIDER_HELP = {
   dens: 'Thickness/opacity of the volume. Higher packs in more glowing material.',
   hue: 'Rotates every colour around the spectrum. 0 = palette unchanged.',
   sat: 'Colour intensity. 0 = greyscale, 1 = normal, above 1 = boosted.',
-  chroma: 'How strongly the dominant musical pitch rotates the palette’s colours. Notes/chords shift the hue; brightness (spectral centroid) adds a warm↔cool tint that fades in when the pitch is unclear. 0 = off.',
+  chroma: 'How strongly harmony drives colour. A confident note/chord pulls the whole multicolour field toward its pitch’s hue; percussion and noise stay multicoloured. Brightness (spectral centroid) adds a warm↔cool tint when the pitch is unclear. 0 = off.',
   tint: 'Washes the whole volume toward the loudest band’s colour (bass/mid/treble). 0 = off.',
   spin: 'How fast the scene auto-rotates (only when Auto-rotate is on).',
 };

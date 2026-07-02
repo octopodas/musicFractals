@@ -79,7 +79,7 @@ export function analyze(ui) {
   chromaVX += (ch.str * Math.cos(6.2831853 * ch.hue) - chromaVX) * 0.12;
   chromaVY += (ch.str * Math.sin(6.2831853 * ch.hue) - chromaVY) * 0.12;
   analysis.chromaHue = (Math.atan2(chromaVY, chromaVX) / 6.2831853 + 1) % 1;
-  analysis.chromaStr = Math.min(1, Math.hypot(chromaVX, chromaVY));
+  analysis.chromaStr = Math.min(1, Math.hypot(chromaVX, chromaVY) * 1.5);   // boost: the smoothed vector rarely tops ~0.6 on real music
 }
 
 // ---------- live capture: route a MediaStream into the analyser instead of the file ----------

@@ -391,6 +391,7 @@ void main(){
       d *= 1.0 + uPulse*(0.30 + uBass*1.1 + uBeat*1.7)*ring;
 
       vec3 e = fluidColor(d, q.y);
+      vec3 eBase = e;   // palette colour before the multicolour spin (already pitch-rotated inside fluidColor)
       // fractal: spin hue with the fold geometry so the foam reads as rich multicolour
       if(uMode==1) e = hueShift(e, 6.2831853*fracCC);
       // liquid: spin hue with the flow geometry so the fluid reads as rich multicolour (same idea)
@@ -399,6 +400,10 @@ void main(){
       if(uMode==2 || uMode==3 || uMode==5 || uMode==6) e = hueShift(e, 6.2831853*geomCC);
       // ink flows through colours as it falls: hue sweeps with height, drifting downward with the flow
       if(uMode==7) e = hueShift(e, 6.2831853*(q.y*0.45 + uTime*0.06*uInkColor));
+      // pitch → colour, part 2: a confident note/chord collapses the multicolour spread back toward the
+      // pitch-rotated palette, so harmony visibly unifies the scene's colour; percussion stays rainbow.
+      // (A plain hue rotation is invisible on a full-spectrum field — a rotated rainbow is still a rainbow.)
+      e = mix(e, eBase, 0.85*clamp(uChromaStr*uChromaAmt, 0.0, 1.0));
       float dens = d*1.7;
       acc += trans * (dens * e + starEmis) * dt * 12.0;   // stars add as direct bright light, uncoupled from density
       trans *= exp(-dens*1.6*dt*12.0);
